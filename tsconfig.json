@@ -1,0 +1,37 @@
+{
+  "compilerOptions": {
+    "target": "ES2017",
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": false,
+    "noEmit": true,
+    "incremental": true,
+    "module": "esnext",
+    "esModuleInterop": true,
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "react-jsx",
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ]
+  },
+  "include": [
+    "next-env.d.ts",
+    ".next/types/**/*.ts",
+    ".next/dev/types/**/*.ts",
+    "**/*.mts",
+    "**/*.ts",
+    "**/*.tsx"
+, "app/components/ProcessMap.jsx", "app/components/PortalShell.jsx", "app/components/ui/tooltip.jsx", "app/components/ui/toggle.jsx", "app/components/ui/toggle-group.jsx", "app/components/ui/textarea.jsx", "app/components/ui/tabs.jsx", "app/components/ui/table.jsx", "app/components/ui/switch.jsx", "app/components/ui/sonner.jsx", "app/components/ui/slider.jsx", "app/components/ui/skeleton.jsx", "app/components/ui/sidebar.jsx", "app/components/ui/sheet.jsx", "app/components/ui/separator.jsx", "app/components/ui/select.jsx", "app/components/ui/scroll-area.jsx", "app/components/ui/resizable.jsx", "app/components/ui/radio-group.jsx", "app/components/ui/progress.jsx", "app/components/ui/popover.jsx", "app/components/ui/pagination.jsx", "app/components/ui/navigation-menu.jsx", "app/components/ui/menubar.jsx", "app/components/ui/label.jsx", "app/components/ui/input.jsx", "app/components/ui/input-otp.jsx", "app/components/ui/hover-card.jsx", "app/components/ui/form.jsx", "app/components/ui/dropdown-menu.jsx", "app/components/ui/drawer.jsx", "app/components/ui/dialog.jsx", "app/components/ui/context-menu.jsx", "app/components/ui/command.jsx", "app/components/ui/collapsible.jsx", "app/components/ui/checkbox.jsx", "app/components/ui/chart.jsx", "app/components/ui/carousel.jsx", "app/components/ui/card.jsx", "app/components/ui/calendar.jsx", "app/components/ui/button.jsx", "app/components/ui/breadcrumb.jsx", "app/components/ui/badge.jsx", "app/components/ui/avatar.jsx", "app/components/ui/aspect-ratio.jsx", "app/components/ui/alert.jsx", "app/components/ui/alert-dialog.jsx", "app/components/ui/accordion.jsx"  ],
+  "exclude": [
+    "node_modules"
+  ]
+}

@@ -3,8 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { createClient } from '@/lib/supabase/client';
-import { Eye, EyeOff, Check, X, MailCheck, CheckCircle2 } from 'lucide-react';
+import { createClient } from '../../../lib/supabase/client';
+import { Eye, EyeOff, Check, X, CheckCircle2 } from 'lucide-react';
 
 export default function CandidateLoginPage() {
   const router = useRouter();
@@ -119,31 +119,48 @@ export default function CandidateLoginPage() {
           throw new Error('Please fulfill all password requirements before continuing.');
         }
 
-        const { data, error } = await supabase.auth.signUp({
+        // 1. Verify if email exists in Supabase profiles table (Pre-approved by Admin)
+        const { data: existingProfile, error: profileCheckError } = await supabase
+          .from('profiles')
+          .select('*')
+          .ilike('email', cleanEmail)
+          .maybeSingle();
+
+        if (profileCheckError) throw profileCheckError;
+
+        if (!existingProfile) {
+          throw new Error('Sign up failed: Your email was not pre-approved by an administrator.');
+        }
+
+        // 2. Perform Supabase Sign Up
+        const { data: authData, error: signUpError } = await supabase.auth.signUp({
           email: cleanEmail,
           password: formData.password,
           options: {
-            data: { full_name: formData.fullName },
+            data: { full_name: formData.fullName || existingProfile.full_name },
           },
         });
 
-        if (error) throw error;
+        if (signUpError) throw signUpError;
 
-        if (data?.user) {
-          const { error: profileError } = await supabase.from('profiles').insert({
-            id: data.user.id,
-            email: cleanEmail,
-            full_name: formData.fullName || cleanEmail.split('@')[0],
-            role: 'CANDIDATE',
-          });
+        // 3. Link profile with newly generated Auth ID
+        if (authData?.user) {
+          const { error: updateError } = await supabase
+            .from('profiles')
+            .update({ 
+              id: authData.user.id,
+              full_name: formData.fullName || existingProfile.full_name 
+            })
+            .ilike('email', cleanEmail);
 
-          if (profileError && profileError.code !== '23505') {
-            throw profileError;
+          if (updateError) {
+            console.warn('Profile sync warning:', updateError.message);
           }
 
           setShowConfirmationModal(true);
         }
       } else {
+        // Log In Flow
         const { data, error } = await supabase.auth.signInWithPassword({
           email: cleanEmail,
           password: formData.password,
@@ -183,17 +200,17 @@ export default function CandidateLoginPage() {
   return (
     <div className="h-screen w-screen overflow-hidden flex text-[#1E293B] bg-white font-sans antialiased select-none">
       
-      {/* Confirmation Email Modal */}
+      {/* Confirmation Account Created Modal */}
       {showConfirmationModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
           <div className="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl text-center space-y-5">
             <div className="w-14 h-14 bg-emerald-50 border border-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto">
-              <MailCheck className="w-7 h-7" />
+              <CheckCircle2 className="w-7 h-7" />
             </div>
             <div className="space-y-2">
-              <h3 className="text-xl font-bold text-slate-900">Check Your Inbox</h3>
+              <h3 className="text-xl font-bold text-slate-900">Sign Up Complete</h3>
               <p className="text-xs text-slate-500 leading-relaxed">
-                We've sent a verification link to <span className="font-semibold text-slate-800">{formData.email}</span>. Please confirm your email address to activate your candidate account.
+                Your account for <span className="font-semibold text-slate-800">{formData.email}</span> has been successfully created. You can now log in with your credentials.
               </p>
             </div>
             <button
@@ -201,7 +218,7 @@ export default function CandidateLoginPage() {
               onClick={handleCloseModal}
               className="w-full py-3 bg-[#1D2543] text-white font-bold text-xs rounded-xl hover:bg-slate-800 transition-colors cursor-pointer shadow-md"
             >
-              Back to Log In
+              Proceed to Log In
             </button>
           </div>
         </div>
