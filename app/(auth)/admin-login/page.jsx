@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { createClient } from '@/lib/supabase/client';
+import { createClient } from '../../../lib/supabase/client';
 import { Eye, EyeOff, X, CheckCircle2 } from 'lucide-react';
 
 export default function AdminLoginPage() {

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { AlertTriangle, ArrowRight, Clock, Users } from "lucide-react";
-import { edges as defaultEdges, steps as defaultSteps } from "@/lib/demo-data";
+import { edges as defaultEdges, steps as defaultSteps } from "../../lib/demo-data";
 
 const R = 26;
 function edgePath(a, b) {

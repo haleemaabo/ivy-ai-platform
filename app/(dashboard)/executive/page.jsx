@@ -1,73 +1,58 @@
 'use client';
 
+import PortalShell from '../../components/PortalShell';
 import { useEffect, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import Image from 'next/image';
 import { createClient } from '../../../lib/supabase/client';
 import {
   AlertTriangle,
   ArrowUpRight,
   ChevronRight,
-  LogOut,
   ChevronDown as MapChevron,
   Network as MapIcon,
 } from 'lucide-react';
-
-// Inject Google Fonts dynamically into document head
-function FontLoader() {
-  useEffect(() => {
-    const link = document.createElement('link');
-    link.href =
-      'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Marcellus&display=swap';
-    link.rel = 'stylesheet';
-    document.head.appendChild(link);
-  }, []);
-
-  return null;
-}
 
 // Dynamic Process Map Component
 function ProcessMap({ steps = [], selectedStep, setSelectedStep }) {
   if (!steps || steps.length === 0) {
     return (
-      <div className="rounded-xl border border-dashed border-slate-200 p-6 text-center text-xs text-slate-400 font-sans">
+      <div className="rounded-xl border border-dashed border-[#E5E3ED] p-6 text-center text-xs text-[#79768D] font-sans">
         No process map steps recorded for this department.
       </div>
     );
   }
 
   return (
-    <div className="space-y-4 rounded-xl border border-slate-200 bg-slate-50/50 p-4 font-sans">
+    <div className="space-y-4 rounded-xl border border-[#E5E3ED] bg-[#EEEEF4]/40 p-4 font-sans">
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {steps.map((step, idx) => {
           const isSelected =
             selectedStep?.id === step.id ||
             selectedStep?.name === step.name ||
             selectedStep?.title === step.title;
-
           return (
             <div
               key={step.id || idx}
               onClick={() => setSelectedStep(step)}
               className={`cursor-pointer rounded-lg border p-3.5 transition-all ${
                 isSelected
-                  ? 'border-indigo-600 bg-indigo-50/50 shadow-xs ring-1 ring-indigo-600'
-                  : 'border-slate-200 bg-white hover:border-slate-300'
+                  ? 'border-[#1F1F3B] bg-white shadow-xs ring-1 ring-[#1F1F3B]'
+                  : 'border-[#E5E3ED] bg-white hover:border-[#79768D]'
               }`}
             >
-              <div className="flex items-center justify-between text-xs font-semibold text-slate-400">
+              <div className="flex items-center justify-between text-xs font-semibold text-[#79768D]">
                 <span>Step {step.step_number || idx + 1}</span>
                 {(step.time || step.duration) && (
-                  <span className="text-[11px] text-slate-500">
+                  <span className="text-[11px] text-[#79768D]">
                     {step.time || step.duration}
                   </span>
                 )}
               </div>
-              <h4 className="mt-1 font-serif text-slate-900 text-sm">
+              <h4 className="mt-1 font-serif text-[#1F1F3B] text-sm">
                 {step.title || step.name || step.step_name || 'Process Step'}
               </h4>
               {(step.performer || step.role) && (
-                <p className="mt-1 text-xs text-slate-500">
+                <p className="mt-1 text-xs text-[#79768D]">
                   Performer: {step.performer || step.role}
                 </p>
               )}
@@ -77,17 +62,17 @@ function ProcessMap({ steps = [], selectedStep, setSelectedStep }) {
       </div>
 
       {selectedStep && (
-        <div className="rounded-lg border border-indigo-100 bg-indigo-50/40 p-4 text-xs text-slate-700 font-sans">
-          <p className="font-bold text-indigo-900 font-serif">
+        <div className="rounded-lg border border-[#D3CCDE] bg-[#EEEEF4] p-4 text-xs text-[#1F1F3B] font-sans">
+          <p className="font-bold text-[#1F1F3B] font-serif">
             {selectedStep.title || selectedStep.name || selectedStep.step_name}
           </p>
           {(selectedStep.description || selectedStep.detail) && (
-            <p className="mt-1 text-slate-600">
+            <p className="mt-1 text-[#4C4B64]">
               {selectedStep.description || selectedStep.detail}
             </p>
           )}
           {(selectedStep.tools || selectedStep.ai_tools) && (
-            <p className="mt-2 text-indigo-700 font-medium">
+            <p className="mt-2 text-[#1F1F3B] font-medium">
               Tools:{' '}
               {Array.isArray(selectedStep.tools || selectedStep.ai_tools)
                 ? (selectedStep.tools || selectedStep.ai_tools).join(', ')
@@ -109,19 +94,15 @@ function DepartmentProcessMap({ deptName, deptId }) {
 
   useEffect(() => {
     if (!open) return;
-
     async function fetchProcessMap() {
       setLoading(true);
-
       let query = supabase.from('process_maps').select('*');
       if (deptId) {
         query = query.eq('department_id', deptId);
       } else {
         query = query.ilike('department_name', deptName);
       }
-
       const { data } = await query.maybeSingle();
-
       if (data) {
         const steps =
           data.steps ||
@@ -130,7 +111,6 @@ function DepartmentProcessMap({ deptName, deptId }) {
             ? JSON.parse(data.process_data)
             : data.process_data) ||
           [];
-
         setMapData({
           owner: data.owner || data.process_owner || deptName,
           workflow: data.workflow || data.workflow_name || 'Workflow Overview',
@@ -145,27 +125,26 @@ function DepartmentProcessMap({ deptName, deptId }) {
       }
       setLoading(false);
     }
-
     fetchProcessMap();
   }, [open, deptName, deptId, supabase]);
 
   return (
-    <div className="border-t border-slate-100 font-sans">
+    <div className="border-t border-[#E5E3ED] font-sans">
       <button
         type="button"
         aria-expanded={open}
-        onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center justify-between gap-3 px-5 py-4 text-left transition-colors hover:bg-slate-50 sm:px-6 cursor-pointer"
+        onClick={() => setOpen((prev) => !prev)}
+        className="flex w-full items-center justify-between gap-3 px-5 py-4 text-left transition-colors hover:bg-[#F7F9FB] sm:px-6 cursor-pointer"
       >
-        <span className="flex items-center gap-2 font-semibold text-slate-800">
-          <MapIcon className="h-4 w-4 text-indigo-600" />
+        <span className="flex items-center gap-2 font-semibold text-[#1F1F3B]">
+          <MapIcon className="h-4 w-4 text-[#1F1F3B]" />
           Process map
-          <span className="hidden text-sm font-normal text-slate-500 sm:inline">
-            · {mapData?.owner || deptName} — {mapData?.workflow || 'Overview'}
+          <span className="hidden text-sm font-normal text-[#79768D] sm:inline">
+            — {mapData?.owner || deptName} ({mapData?.workflow || 'Overview'})
           </span>
         </span>
         <MapChevron
-          className={`h-5 w-5 text-slate-400 transition-transform ${
+          className={`h-5 w-5 text-[#79768D] transition-transform ${
             open ? 'rotate-180' : ''
           }`}
         />
@@ -173,11 +152,11 @@ function DepartmentProcessMap({ deptName, deptId }) {
 
       {open && (
         <div className="px-5 pb-5 sm:px-6 sm:pb-6">
-          <p className="mb-3 text-sm text-slate-500">
+          <p className="mb-3 text-sm text-[#79768D]">
             Click a step for performer, time, and AI tools.
           </p>
           {loading ? (
-            <div className="py-6 text-center text-xs text-slate-400">
+            <div className="py-6 text-center text-xs text-[#79768D]">
               Loading process map details...
             </div>
           ) : (
@@ -193,75 +172,19 @@ function DepartmentProcessMap({ deptName, deptId }) {
   );
 }
 
-// Main App Frame
-function PortalShell({ children, email, role }) {
-  const router = useRouter();
-  const supabase = createClient();
-
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    sessionStorage.clear();
-    router.push('/admin-login');
-  };
-
-  return (
-    <div
-      className="min-h-screen bg-[#F8FAFC] text-[#1E293B] flex flex-col antialiased"
-      style={{ fontFamily: "'Inter', sans-serif" }}
-    >
-      <FontLoader />
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-30 px-6 py-3.5 flex items-center justify-between">
-        <div className="flex items-center gap-6">
-          <Image
-            src="/ivy-logo-dark.png"
-            alt="IVY & COMPANY"
-            width={130}
-            height={36}
-            priority
-          />
-          <span className="text-[11px] font-semibold tracking-widest text-slate-400 uppercase border-l border-slate-200 pl-4 py-1">
-            Executive Dashboard
-          </span>
-        </div>
-        <div className="flex items-center gap-4">
-          {email && (
-            <div className="text-right hidden sm:block">
-              <p className="text-xs font-semibold text-slate-800 capitalize">
-                {role || 'Executive'}
-              </p>
-              <p className="text-[10px] text-slate-400 font-mono">{email}</p>
-            </div>
-          )}
-          <button
-            onClick={handleLogout}
-            className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
-            title="Log Out"
-          >
-            <LogOut className="w-4 h-4" />
-          </button>
-        </div>
-      </header>
-
-      <main className="flex-1 max-w-7xl w-full mx-auto p-6 space-y-8">
-        {children}
-      </main>
-    </div>
-  );
-}
-
 function Stat({ label, value, sub, trend }) {
   return (
-    <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col justify-between">
-      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+    <div className="bg-white p-5 rounded-2xl border border-[#E5E3ED] shadow-xs flex flex-col justify-between">
+      <p className="text-[10px] font-bold text-[#79768D] uppercase tracking-wider">
         {label}
       </p>
       <p
-        className="text-3xl font-normal text-slate-900 mt-2"
+        className="text-3xl font-normal text-[#1F1F3B] mt-2"
         style={{ fontFamily: "'Marcellus', serif" }}
       >
-        {value ?? '—'}
+        {value ?? '-'}
       </p>
-      {sub && <p className="text-xs text-slate-500 mt-1">{sub}</p>}
+      {sub && <p className="text-xs text-[#79768D] mt-1">{sub}</p>}
       {trend && (
         <p className="text-xs text-emerald-600 font-medium mt-1">
           {trend === 'up' ? '▲ Trending Up' : trend}
@@ -272,24 +195,27 @@ function Stat({ label, value, sub, trend }) {
 }
 
 function performanceTone(value) {
-  if (value >= 75)
+  if (value >= 75) {
     return {
       badge: 'bg-emerald-600 text-white',
       surface: 'bg-emerald-50/40',
       border: 'border-l-emerald-600',
     };
-  if (value >= 60)
+  }
+  if (value >= 60) {
     return {
-      badge: 'bg-indigo-600 text-white',
-      surface: 'bg-indigo-50/40',
-      border: 'border-l-indigo-600',
+      badge: 'bg-[#1F1F3B] text-white',
+      surface: 'bg-[#EEEEF4]/40',
+      border: 'border-l-[#1F1F3B]',
     };
-  if (value >= 50)
+  }
+  if (value >= 50) {
     return {
       badge: 'bg-amber-500 text-white',
       surface: 'bg-amber-50/40',
       border: 'border-l-amber-500',
     };
+  }
   return {
     badge: 'bg-rose-600 text-white',
     surface: 'bg-rose-50/40',
@@ -297,36 +223,29 @@ function performanceTone(value) {
   };
 }
 
-// Trend Line Chart Driven Entirely by Dynamic Props
 function TrendChart({ trendData = [] }) {
   if (!trendData || trendData.length === 0) {
     return (
-      <div className="h-[310px] flex items-center justify-center text-xs text-slate-400">
+      <div className="h-[310px] flex items-center justify-center text-xs text-[#79768D]">
         No trend data recorded.
       </div>
     );
   }
 
   const stepX = trendData.length > 1 ? 340 / (trendData.length - 1) : 0;
-
+  
   const points = trendData
-    .map(
-      (item, index) =>
-        `${28 + index * stepX},${190 - (item.adoption || 0) * 1.55}`
-    )
+    .map((item, index) => `${28 + index * stepX},${190 - (item.adoption || 0) * 1.55}`)
     .join(' ');
+
   const verified = trendData
-    .map(
-      (item, index) =>
-        `${28 + index * stepX},${190 - (item.verified || 0) * 1.55}`
-    )
+    .map((item, index) => `${28 + index * stepX},${190 - (item.verified || 0) * 1.55}`)
     .join(' ');
+
   const target = trendData
-    .map(
-      (item, index) =>
-        `${28 + index * stepX},${190 - (item.target || 0) * 1.55}`
-    )
+    .map((item, index) => `${28 + index * stepX},${190 - (item.target || 0) * 1.55}`)
     .join(' ');
+
   const area = `28,190 ${points} ${28 + (trendData.length - 1) * stepX},190`;
 
   return (
@@ -339,15 +258,15 @@ function TrendChart({ trendData = [] }) {
             x2="368"
             y1={y}
             y2={y}
-            stroke="#E2E8F0"
+            stroke="#E5E3ED"
             strokeDasharray="3 3"
           />
         ))}
-        <polygon points={area} fill="#6366F1" opacity="0.09" />
+        <polygon points={area} fill="#1F1F3B" opacity="0.08" />
         <polyline
           points={target}
           fill="none"
-          stroke="#94A3B8"
+          stroke="#79768D"
           strokeWidth="2"
           strokeDasharray="6 5"
         />
@@ -361,7 +280,7 @@ function TrendChart({ trendData = [] }) {
         <polyline
           points={points}
           fill="none"
-          stroke="#6366F1"
+          stroke="#1F1F3B"
           strokeWidth="3"
           strokeLinejoin="round"
         />
@@ -380,14 +299,14 @@ function TrendChart({ trendData = [] }) {
             x={28 + index * stepX}
             y="214"
             textAnchor="middle"
-            fill="#64748B"
+            fill="#79768D"
             fontSize="11"
           >
             {item.month}
           </text>
         ))}
-        <g transform="translate(52 236)" fontSize="10" fill="#64748B">
-          <circle cx="0" cy="-3" r="4" fill="#6366F1" />
+        <g transform="translate(52 236)" fontSize="10" fill="#79768D">
+          <circle cx="0" cy="-3" r="4" fill="#1F1F3B" />
           <text x="9">Adoption</text>
           <circle cx="90" cy="-3" r="4" fill="#10B981" />
           <text x="99">Verified</text>
@@ -396,7 +315,7 @@ function TrendChart({ trendData = [] }) {
             x2="192"
             y1="-3"
             y2="-3"
-            stroke="#94A3B8"
+            stroke="#79768D"
             strokeDasharray="4 3"
           />
           <text x="198">Plan</text>
@@ -406,11 +325,10 @@ function TrendChart({ trendData = [] }) {
   );
 }
 
-// Maturity Donut Chart Dynamic Calculation
 function MaturityDonut({ stageData = [] }) {
   if (!stageData || stageData.length === 0) {
     return (
-      <div className="h-[220px] flex items-center justify-center text-xs text-slate-400">
+      <div className="h-[220px] flex items-center justify-center text-xs text-[#79768D]">
         No maturity stage data recorded.
       </div>
     );
@@ -420,9 +338,19 @@ function MaturityDonut({ stageData = [] }) {
   const totalValue = stageData.reduce((acc, curr) => acc + (curr.value || 0), 0);
 
   return (
-    <div className="relative mx-auto h-[220px] w-full max-w-[250px]" aria-label="Adoption maturity stage donut chart">
+    <div
+      className="relative mx-auto h-[220px] w-full max-w-[250px]"
+      aria-label="Adoption maturity stage donut chart"
+    >
       <svg viewBox="0 0 200 200" className="h-full w-full -rotate-90" role="img">
-        <circle cx="100" cy="100" r="67" fill="none" stroke="#F1F5F9" strokeWidth="28" />
+        <circle
+          cx="100"
+          cy="100"
+          r="67"
+          fill="none"
+          stroke="#EEEEF4"
+          strokeWidth="28"
+        />
         {stageData.map((stage) => {
           const dash = (stage.value || 0) * 4.21;
           const currentOffset = offset;
@@ -434,7 +362,7 @@ function MaturityDonut({ stageData = [] }) {
               cy="100"
               r="67"
               fill="none"
-              stroke={stage.fill || '#6366F1'}
+              stroke={stage.fill || '#1F1F3B'}
               strokeWidth="28"
               strokeDasharray={`${Math.max(0, dash - 5)} ${421 - Math.max(0, dash - 5)}`}
               strokeDashoffset={-currentOffset}
@@ -444,22 +372,21 @@ function MaturityDonut({ stageData = [] }) {
       </svg>
       <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
         <span
-          className="text-3xl font-normal text-slate-900"
+          className="text-3xl font-normal text-[#1F1F3B]"
           style={{ fontFamily: "'Marcellus', serif" }}
         >
           {totalValue}%
         </span>
-        <span className="text-xs text-slate-500">total tracked</span>
+        <span className="text-xs text-[#79768D]">total tracked</span>
       </div>
     </div>
   );
 }
 
-// Radar Chart Calculated Dynamically
 function CapabilityRadar({ capabilityData = [] }) {
   if (!capabilityData || capabilityData.length === 0) {
     return (
-      <div className="h-[300px] flex items-center justify-center text-xs text-slate-400">
+      <div className="h-[300px] flex items-center justify-center text-xs text-[#79768D]">
         No capability scores recorded.
       </div>
     );
@@ -475,8 +402,13 @@ function CapabilityRadar({ capabilityData = [] }) {
     return `${center + Math.cos(angle) * radius},${center + Math.sin(angle) * radius}`;
   };
 
-  const score = capabilityData.map((item, index) => point(index, item.score || 0)).join(' ');
-  const benchmark = capabilityData.map((item, index) => point(index, item.benchmark || 0)).join(' ');
+  const score = capabilityData
+    .map((item, index) => point(index, item.score || 0))
+    .join(' ');
+
+  const benchmark = capabilityData
+    .map((item, index) => point(index, item.benchmark || 0))
+    .join(' ');
 
   return (
     <div className="h-[300px] w-full" aria-label="Capability radar chart">
@@ -486,7 +418,7 @@ function CapabilityRadar({ capabilityData = [] }) {
             key={value}
             points={capabilityData.map((_, index) => point(index, value)).join(' ')}
             fill="none"
-            stroke="#E2E8F0"
+            stroke="#E5E3ED"
           />
         ))}
         {capabilityData.map((_, index) => {
@@ -498,7 +430,7 @@ function CapabilityRadar({ capabilityData = [] }) {
               y1={center}
               x2={p[0]}
               y2={p[1]}
-              stroke="#E2E8F0"
+              stroke="#E5E3ED"
             />
           );
         })}
@@ -511,9 +443,9 @@ function CapabilityRadar({ capabilityData = [] }) {
         />
         <polygon
           points={score}
-          fill="#6366F1"
-          fillOpacity="0.2"
-          stroke="#6366F1"
+          fill="#1F1F3B"
+          fillOpacity="0.15"
+          stroke="#1F1F3B"
           strokeWidth="2"
         />
         {capabilityData.map((item, index) => {
@@ -525,15 +457,15 @@ function CapabilityRadar({ capabilityData = [] }) {
               y={p[1]}
               textAnchor="middle"
               dominantBaseline="middle"
-              fill="#64748B"
+              fill="#79768D"
               fontSize="10"
             >
               {item.capability}
             </text>
           );
         })}
-        <g transform="translate(66 255)" fontSize="9" fill="#64748B">
-          <circle cx="0" cy="-3" r="4" fill="#6366F1" />
+        <g transform="translate(66 255)" fontSize="9" fill="#79768D">
+          <circle cx="0" cy="-3" r="4" fill="#1F1F3B" />
           <text x="8">Current Score</text>
           <circle cx="85" cy="-3" r="4" fill="#F59E0B" />
           <text x="93">Benchmark</text>
@@ -546,7 +478,7 @@ function CapabilityRadar({ capabilityData = [] }) {
 function DiscoveryUseCases({ discoveryUseCases = [] }) {
   if (!discoveryUseCases || discoveryUseCases.length === 0) {
     return (
-      <div className="py-6 text-center text-xs text-slate-400">
+      <div className="py-6 text-center text-xs text-[#79768D]">
         No discovery use cases recorded.
       </div>
     );
@@ -557,12 +489,12 @@ function DiscoveryUseCases({ discoveryUseCases = [] }) {
       {discoveryUseCases.map((item) => (
         <div key={item.label || item.id}>
           <div className="mb-2 flex items-center justify-between gap-4 text-xs">
-            <span className="font-medium text-slate-800">{item.label}</span>
+            <span className="font-medium text-[#1F1F3B]">{item.label}</span>
             <strong>{item.share}% mentioned</strong>
           </div>
-          <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+          <div className="h-2 overflow-hidden rounded-full bg-[#EEEEF4]">
             <div
-              className="h-full rounded-full bg-indigo-600"
+              className="h-full rounded-full bg-[#1F1F3B]"
               style={{ width: `${item.share}%` }}
             />
           </div>
@@ -575,16 +507,16 @@ function DiscoveryUseCases({ discoveryUseCases = [] }) {
 function ChartHeading({ eyebrow, title, detail }) {
   return (
     <div className="mb-5">
-      <p className="text-xs font-semibold uppercase tracking-wider text-indigo-600">
+      <p className="text-xs font-semibold uppercase tracking-wider text-[#1F1F3B]">
         {eyebrow}
       </p>
       <h2
-        className="mt-1 text-2xl font-normal text-slate-900"
+        className="mt-1 text-2xl font-normal text-[#1F1F3B]"
         style={{ fontFamily: "'Marcellus', serif" }}
       >
         {title}
       </h2>
-      <p className="mt-1 text-sm leading-5 text-slate-500">{detail}</p>
+      <p className="mt-1 text-sm leading-5 text-[#79768D]">{detail}</p>
     </div>
   );
 }
@@ -593,7 +525,6 @@ export default function ExecutiveDashboardPage() {
   const supabase = createClient();
   const searchParams = useSearchParams();
   const router = useRouter();
-
   const [loading, setLoading] = useState(true);
   const [userProfile, setUserProfile] = useState({ email: '', role: '' });
   const [executiveSummary, setExecutiveSummary] = useState(null);
@@ -612,7 +543,6 @@ export default function ExecutiveDashboardPage() {
   useEffect(() => {
     async function fetchDynamicData() {
       setLoading(true);
-
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -630,7 +560,6 @@ export default function ExecutiveDashboardPage() {
         });
       }
 
-      // Query database tables in parallel
       const [
         { data: summary },
         { data: depts },
@@ -642,7 +571,10 @@ export default function ExecutiveDashboardPage() {
       ] = await Promise.all([
         supabase.from('executive_summaries').select('*').maybeSingle(),
         supabase.from('departments').select('*'),
-        supabase.from('adoption_trends').select('*').order('id', { ascending: true }),
+        supabase
+          .from('adoption_trends')
+          .select('*')
+          .order('id', { ascending: true }),
         supabase.from('capability_scores').select('*'),
         supabase.from('adoption_stages').select('*'),
         supabase.from('discovery_use_cases').select('*'),
@@ -658,7 +590,6 @@ export default function ExecutiveDashboardPage() {
         discoveryUseCases: useCases || [],
         attentionItems: attention || [],
       });
-
       setLoading(false);
     }
 
@@ -667,7 +598,7 @@ export default function ExecutiveDashboardPage() {
 
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center font-medium text-slate-500 font-sans">
+      <div className="flex h-screen items-center justify-center font-medium text-[#79768D] font-sans">
         Loading Executive Intelligence...
       </div>
     );
@@ -680,26 +611,23 @@ export default function ExecutiveDashboardPage() {
           <section id="overview" className="mb-8 scroll-mt-24">
             <div className="flex flex-wrap items-end justify-between gap-4">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-indigo-600">
-                  {executiveSummary?.subtitle || 'Enterprise intelligence'}
-                </p>
                 <h1
-                  className="mt-2 max-w-3xl text-4xl font-normal leading-tight text-slate-900 sm:text-5xl"
+                  className="mt-2 max-w-3xl text-4xl font-normal leading-tight text-[#1F1F3B] sm:text-5xl"
                   style={{ fontFamily: "'Marcellus', serif" }}
                 >
-                  {executiveSummary?.headline || 'Enterprise Overview'}
+                  {executiveSummary?.headline || 'Executive Overview'}
                 </h1>
-                <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-500">
+                <p className="mt-3 max-w-2xl text-sm leading-6 text-[#79768D]">
                   {executiveSummary?.description ||
-                    'Portfolio view across active operations and department workflows.'}
+                    'Portfolio view across active operations and workflows.'}
                 </p>
               </div>
               {executiveSummary?.next_review_date && (
-                <div className="rounded-xl border border-slate-200/80 bg-white px-4 py-3 text-right shadow-xs">
-                  <p className="text-xs font-medium text-slate-400">
+                <div className="rounded-xl border border-[#E5E3ED] bg-white px-4 py-3 text-right shadow-xs">
+                  <p className="text-xs font-medium text-[#79768D]">
                     Next leadership review
                   </p>
-                  <p className="mt-1 text-sm font-semibold text-slate-800">
+                  <p className="mt-1 text-sm font-semibold text-[#1F1F3B]">
                     {executiveSummary.next_review_date}
                   </p>
                 </div>
@@ -748,7 +676,7 @@ export default function ExecutiveDashboardPage() {
             id="trends"
             className="mb-8 grid scroll-mt-24 gap-6 xl:grid-cols-[minmax(0,1.65fr)_minmax(320px,0.85fr)]"
           >
-            <article className="min-w-0 p-5 sm:p-7 bg-white rounded-2xl border border-slate-200/80 shadow-xs">
+            <article className="min-w-0 p-5 sm:p-7 bg-white rounded-2xl border border-[#E5E3ED] shadow-xs">
               <ChartHeading
                 eyebrow="Momentum"
                 title="Adoption and verified output over time"
@@ -757,27 +685,29 @@ export default function ExecutiveDashboardPage() {
               <TrendChart trendData={dashboardData.trendData} />
             </article>
 
-            <article className="min-w-0 p-5 sm:p-7 bg-white rounded-2xl border border-slate-200/80 shadow-xs">
+            <article className="min-w-0 p-5 sm:p-7 bg-white rounded-2xl border border-[#E5E3ED] shadow-xs">
               <ChartHeading
                 eyebrow="Workforce"
                 title="Adoption maturity"
                 detail="Share of employees by behavior stage."
               />
               <MaturityDonut stageData={dashboardData.stageData} />
-              <div className="grid grid-cols-2 gap-x-3 gap-y-2 border-t border-slate-100 pt-4">
+              <div className="grid grid-cols-2 gap-x-3 gap-y-2 border-t border-[#E5E3ED] pt-4">
                 {dashboardData.stageData.map((stage) => (
                   <div
                     key={stage.name}
                     className="flex items-center justify-between gap-2 text-xs"
                   >
-                    <span className="flex min-w-0 items-center gap-2 text-slate-500">
+                    <span className="flex min-w-0 items-center gap-2 text-[#79768D]">
                       <span
                         className="h-2 w-2 shrink-0 rounded-sm"
-                        style={{ backgroundColor: stage.fill || '#6366F1' }}
+                        style={{
+                          backgroundColor: stage.fill || '#1F1F3B',
+                        }}
                       />
                       {stage.name}
                     </span>
-                    <strong className="text-slate-800">{stage.value}%</strong>
+                    <strong className="text-[#1F1F3B]">{stage.value}%</strong>
                   </div>
                 ))}
               </div>
@@ -785,14 +715,14 @@ export default function ExecutiveDashboardPage() {
           </section>
 
           <section className="mb-8 grid gap-6 xl:grid-cols-2">
-            <article className="min-w-0 p-5 sm:p-7 bg-white rounded-2xl border border-slate-200/80 shadow-xs">
+            <article className="min-w-0 p-5 sm:p-7 bg-white rounded-2xl border border-[#E5E3ED] shadow-xs">
               <ChartHeading
                 eyebrow="Portfolio"
                 title="Department adoption index"
                 detail="A concise view of adoption by department."
               />
               {dashboardData.departments.length === 0 ? (
-                <p className="text-xs text-slate-400 py-6 text-center">
+                <p className="text-xs text-[#79768D] py-6 text-center">
                   No departments found.
                 </p>
               ) : (
@@ -804,14 +734,14 @@ export default function ExecutiveDashboardPage() {
                     return (
                       <div
                         key={department.name || department.id}
-                        className={`rounded-lg border-l-4 p-4 ${tone.surface} ${tone.border}`}
+                        className={`rounded-lg border-l-4 p-4 ${tone.surface} ${tone.border} flex flex-col justify-between`}
                       >
-                        <div className="flex items-start justify-between gap-3">
-                          <span className="text-sm font-semibold text-slate-800">
+                        <div className="flex items-start justify-between gap-3 text-[#1F1F3B]">
+                          <span className="text-sm font-semibold">
                             {department.name}
                           </span>
                           <strong
-                            className="text-2xl font-normal text-slate-900"
+                            className="text-2xl font-normal text-[#1F1F3B]"
                             style={{ fontFamily: "'Marcellus', serif" }}
                           >
                             {indexVal}
@@ -819,7 +749,7 @@ export default function ExecutiveDashboardPage() {
                         </div>
                         <button
                           onClick={() => router.push('?tab=departments')}
-                          className="mt-4 flex w-full items-center justify-between border-t border-slate-200/60 pt-3 text-xs font-semibold text-slate-700 cursor-pointer hover:text-indigo-600 transition-colors"
+                          className="mt-4 flex w-full items-center justify-between border-t border-[#E5E3ED] pt-3 text-xs font-semibold text-[#1F1F3B] cursor-pointer hover:text-[#4C4B64] transition-colors"
                         >
                           Learn more <ChevronRight className="h-4 w-4" />
                         </button>
@@ -830,13 +760,15 @@ export default function ExecutiveDashboardPage() {
               )}
             </article>
 
-            <article className="min-w-0 p-5 sm:p-7 bg-white rounded-2xl border border-slate-200/80 shadow-xs">
+            <article className="min-w-0 p-5 sm:p-7 bg-white rounded-2xl border border-[#E5E3ED] shadow-xs">
               <ChartHeading
                 eyebrow="Readiness"
                 title="Enterprise capability profile"
                 detail="Capabilities evaluated against target benchmark criteria."
               />
-              <CapabilityRadar capabilityData={dashboardData.capabilityData} />
+              <CapabilityRadar
+                capabilityData={dashboardData.capabilityData}
+              />
             </article>
           </section>
 
@@ -844,18 +776,18 @@ export default function ExecutiveDashboardPage() {
             id="attention"
             className="mb-8 grid scroll-mt-24 gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(310px,0.65fr)]"
           >
-            <article className="p-5 sm:p-7 bg-white rounded-2xl border border-slate-200/80 shadow-xs">
+            <article className="p-5 sm:p-7 bg-white rounded-2xl border border-[#E5E3ED] shadow-xs">
               <ChartHeading
                 eyebrow="Leadership attention"
                 title="Key strategic priorities"
                 detail="Action items prioritized from workflow and evidence evaluations."
               />
               {dashboardData.attentionItems.length === 0 ? (
-                <p className="text-xs text-slate-400 py-6 text-center">
+                <p className="text-xs text-[#79768D] py-6 text-center">
                   No pending action items.
                 </p>
               ) : (
-                <div className="divide-y divide-slate-100">
+                <div className="divide-y divide-[#E5E3ED]">
                   {dashboardData.attentionItems.map((item) => (
                     <div
                       key={item.title || item.id}
@@ -863,15 +795,15 @@ export default function ExecutiveDashboardPage() {
                     >
                       <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0" />
                       <div>
-                        <p className="text-sm font-semibold text-slate-800">
+                        <p className="text-sm font-semibold text-[#1F1F3B]">
                           {item.title}
                         </p>
-                        <p className="mt-1 text-xs text-slate-500">
+                        <p className="mt-1 text-xs text-[#79768D]">
                           {item.detail}
                         </p>
                       </div>
                       {item.action && (
-                        <span className="flex items-center gap-1 text-xs font-semibold text-indigo-600 cursor-pointer hover:underline">
+                        <span className="flex items-center gap-1 text-xs font-semibold text-[#1F1F3B] cursor-pointer hover:underline">
                           {item.action}
                           <ArrowUpRight className="h-3.5 w-3.5" />
                         </span>
@@ -882,7 +814,7 @@ export default function ExecutiveDashboardPage() {
               )}
             </article>
 
-            <article className="min-w-0 p-5 sm:p-7 bg-white rounded-2xl border border-slate-200/80 shadow-xs">
+            <article className="min-w-0 p-5 sm:p-7 bg-white rounded-2xl border border-[#E5E3ED] shadow-xs">
               <ChartHeading
                 eyebrow="Discovery insights"
                 title="Primary use cases"
@@ -898,34 +830,34 @@ export default function ExecutiveDashboardPage() {
 
       {view === 'departments' && (
         <section id="departments" className="mb-10 scroll-mt-24">
-          <div className="mb-7 border-b border-slate-200 pb-5">
+          <div className="mb-7 border-b border-[#E5E3ED] pb-5">
             <div className="flex flex-wrap items-end justify-between gap-4">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-indigo-600">
+                <p className="text-xs font-semibold uppercase tracking-wider text-[#1F1F3B]">
                   Evidence explorer
                 </p>
                 <h2
-                  className="mt-1 text-3xl font-normal text-slate-900"
+                  className="mt-1 text-3xl font-normal text-[#1F1F3B]"
                   style={{ fontFamily: "'Marcellus', serif" }}
                 >
                   Department breakdowns
                 </h2>
-                <p className="mt-2 text-sm text-slate-500">
+                <p className="mt-2 text-sm text-[#79768D]">
                   Operational results and process detail by operational area.
                 </p>
               </div>
               <button
                 onClick={() => router.push('?tab=overview')}
-                className="flex items-center gap-1 text-sm font-semibold text-indigo-600 cursor-pointer hover:underline"
+                className="flex items-center gap-1 text-sm font-semibold text-[#1F1F3B] cursor-pointer hover:underline"
               >
-                Back to overview{' '}
+                Back to overview
                 <ChevronRight className="h-4 w-4 rotate-180" />
               </button>
             </div>
           </div>
 
           {dashboardData.departments.length === 0 ? (
-            <div className="p-12 text-center text-sm text-slate-400 bg-white rounded-2xl border border-slate-200">
+            <div className="p-12 text-center text-sm text-[#79768D] bg-white rounded-2xl border border-[#E5E3ED]">
               No department records available.
             </div>
           ) : (
@@ -934,18 +866,19 @@ export default function ExecutiveDashboardPage() {
                 const indexVal =
                   department.index || department.adoption_index || 0;
                 const tone = performanceTone(indexVal);
+
                 return (
                   <article
                     key={department.name || department.id}
-                    className="scroll-mt-24 overflow-hidden bg-white rounded-2xl border border-slate-200/80 shadow-xs"
+                    className="scroll-mt-24 overflow-hidden bg-white rounded-2xl border border-[#E5E3ED] shadow-xs"
                   >
                     <div
-                      className={`grid gap-5 border-b border-slate-200/60 p-5 sm:p-6 lg:grid-cols-[minmax(0,1fr)_repeat(2,minmax(110px,auto))] lg:items-center ${tone.surface}`}
+                      className={`grid gap-5 border-b border-[#E5E3ED] p-5 sm:p-6 lg:grid-cols-[minmax(0,1fr)_repeat(2,minmax(110px,auto))] lg:items-center ${tone.surface}`}
                     >
                       <div>
                         <div className="flex flex-wrap items-center gap-3">
                           <h3
-                            className="text-2xl font-normal text-slate-900"
+                            className="text-2xl font-normal text-[#1F1F3B]"
                             style={{ fontFamily: "'Marcellus', serif" }}
                           >
                             {department.name}
@@ -959,27 +892,24 @@ export default function ExecutiveDashboardPage() {
                       </div>
                       <dl className="contents">
                         <div>
-                          <dt className="text-xs text-slate-500">
+                          <dt className="text-xs text-[#79768D]">
                             Quality Score
                           </dt>
-                          <dd className="mt-1 text-xl font-bold text-slate-800">
+                          <dd className="mt-1 text-xl font-bold text-[#1F1F3B]">
                             {department.quality ||
                               department.quality_score ||
-                              'N/A'}{' '}
-                            / 5
+                              'N/A'}
+                            /5
                           </dd>
                         </div>
                         <div>
-                          <dt className="text-xs text-slate-500">
+                          <dt className="text-xs text-[#79768D]">
                             Turnaround Time
                           </dt>
-                          <dd className="mt-1 text-xl font-bold text-slate-800">
+                          <dd className="mt-1 text-xl font-bold text-[#1F1F3B]">
                             {department.turnaroundAfter ||
                             department.turnaround_days
-                              ? `${
-                                  department.turnaroundAfter ||
-                                  department.turnaround_days
-                                }d`
+                              ? `${department.turnaroundAfter || department.turnaround_days}d`
                               : 'N/A'}
                           </dd>
                         </div>
