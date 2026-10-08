@@ -1,12 +1,11 @@
 'use client';
-
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { createClient } from '@/lib/supabase/client';
+import { createClient } from '../../../lib/supabase/client';
 import * as XLSX from 'xlsx';
 import {
-  User as UserIcon,
+  User as Usericon,
   Plus,
   Search,
   LogOut,
@@ -24,6 +23,7 @@ import {
   SlidersHorizontal,
   Building2,
   Trash2,
+  Briefcase,
 } from 'lucide-react';
 
 const MONTHS = [
@@ -51,11 +51,13 @@ export default function AdminDashboard() {
   const [availableWorkflows, setAvailableWorkflows] = useState([]);
   const [allWorkflowSteps, setAllWorkflowSteps] = useState([]);
   const [customOrganizations, setCustomOrganizations] = useState([]);
+  const [customDepartments, setCustomDepartments] = useState([]);
 
   // Column Filter States
   const [columnFilters, setColumnFilters] = useState({
     nameEmail: '',
     organization: 'ALL',
+    department: 'ALL',
     status: 'ALL',
     role: 'ALL',
     workflow: 'ALL',
@@ -93,11 +95,14 @@ export default function AdminDashboard() {
   // UI Dialog Modals
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isAddOrgModalOpen, setIsAddOrgModalOpen] = useState(false);
+  const [isAddDeptModalOpen, setIsAddDeptModalOpen] = useState(false);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [errorModal, setErrorModal] = useState({ open: false, title: '', message: '' });
 
   // Forms & Import States
   const [newOrgName, setNewOrgName] = useState('');
+  const [newDeptName, setNewDeptName] = useState('');
+  const [newDeptOrg, setNewDeptOrg] = useState('');
   const [newEmp, setNewEmp] = useState({
     name: '',
     email: '',
@@ -106,6 +111,7 @@ export default function AdminDashboard() {
     organization: '',
     department: '',
   });
+
   const [showModalPassword, setShowModalPassword] = useState(false);
   const [parsedUsers, setParsedUsers] = useState([]);
   const [uploadFileName, setUploadFileName] = useState('');
@@ -122,7 +128,7 @@ export default function AdminDashboard() {
     return diffDays === 0 ? 'Same Day' : `${diffDays} day${diffDays > 1 ? 's' : ''}`;
   };
 
-  // Data Fetchers
+  // Fetch Profiles with Organizations & Departments
   const fetchEmployeesFromSupabase = useCallback(async () => {
     try {
       const { data: usersData, error: usersError } = await supabase
@@ -147,6 +153,7 @@ export default function AdminDashboard() {
           ...emp,
           name: emp.full_name || emp.name || '',
           organization: emp.organizations?.name || emp.organization || '',
+          department: emp.department || '',
           password: emp.role === 'EXECUTIVE' ? credMap[emp.id] || '' : emp.password || '',
         }));
         setEmployees(formatted);
@@ -236,13 +243,7 @@ export default function AdminDashboard() {
     return () => {
       isSubscribed = false;
     };
-  }, [
-    router,
-    supabase,
-    fetchEmployeesFromSupabase,
-    fetchApprovedWorkflows,
-    fetchAllWorkflowSteps,
-  ]);
+  }, [router, supabase, fetchEmployeesFromSupabase, fetchApprovedWorkflows, fetchAllWorkflowSteps]);
 
   const getUserWorkflows = useCallback(
     (emp) => {
@@ -263,8 +264,19 @@ export default function AdminDashboard() {
     return Array.from(orgsSet).sort();
   }, [employees, customOrganizations]);
 
+  const availableDepartments = useMemo(() => {
+    const deptSet = new Set(customDepartments);
+    employees.forEach((emp) => {
+      if (emp.department && emp.department.trim()) {
+        deptSet.add(emp.department.trim());
+      }
+    });
+    return Array.from(deptSet).sort();
+  }, [employees, customDepartments]);
+
   const dynamicOptions = useMemo(() => {
     const orgs = new Set(availableOrganizations);
+    const depts = new Set(availableDepartments);
     const datesAssigned = new Set();
     const durationsDays = new Set();
     const durationsTime = new Set();
@@ -295,6 +307,7 @@ export default function AdminDashboard() {
 
     return {
       orgs: Array.from(orgs).sort(),
+      depts: Array.from(depts).sort(),
       datesAssigned: Array.from(datesAssigned).sort(),
       durationsDays: Array.from(durationsDays).sort(),
       durationsTime: Array.from(durationsTime).sort(),
@@ -302,7 +315,7 @@ export default function AdminDashboard() {
       yearsAssigned: Array.from(yearsAssigned).sort((a, b) => Number(b) - Number(a)),
       yearsCompleted: Array.from(yearsCompleted).sort((a, b) => Number(b) - Number(a)),
     };
-  }, [employees, getUserWorkflows, availableOrganizations]);
+  }, [employees, getUserWorkflows, availableOrganizations, availableDepartments]);
 
   const filteredEmployees = useMemo(() => {
     return employees.filter((emp) => {
@@ -318,6 +331,12 @@ export default function AdminDashboard() {
       if (columnFilters.organization === 'UNASSIGNED') matchesOrg = !empOrg;
       else if (columnFilters.organization !== 'ALL')
         matchesOrg = empOrg.toLowerCase() === columnFilters.organization.toLowerCase();
+
+      const empDept = (emp.department || '').trim();
+      let matchesDept = true;
+      if (columnFilters.department === 'UNASSIGNED') matchesDept = !empDept;
+      else if (columnFilters.department !== 'ALL')
+        matchesDept = empDept.toLowerCase() === columnFilters.department.toLowerCase();
 
       let matchesStatus = true;
       if (columnFilters.status === 'COMPLETED')
@@ -402,6 +421,7 @@ export default function AdminDashboard() {
       return (
         matchesNameEmail &&
         matchesOrg &&
+        matchesDept &&
         matchesStatus &&
         matchesRole &&
         matchesWorkflow &&
@@ -413,12 +433,11 @@ export default function AdminDashboard() {
     });
   }, [employees, columnFilters, getUserWorkflows]);
 
-  // Action Handlers
+  // Handlers
   const handleAddOrganization = async (e) => {
     e.preventDefault();
     const trimmed = newOrgName.trim();
     if (!trimmed) return;
-
     const { error } = await supabase.from('organizations').insert([{ name: trimmed }]);
     if (error) {
       showAlert('Error Adding Organization', error.message);
@@ -428,6 +447,17 @@ export default function AdminDashboard() {
     setNewOrgName('');
     setIsAddOrgModalOpen(false);
     showAlert('Success', `Organization "${trimmed}" saved permanently.`);
+  };
+
+  const handleAddDepartment = async (e) => {
+    e.preventDefault();
+    const trimmed = newDeptName.trim();
+    if (!trimmed) return;
+    setCustomDepartments((prev) => [...prev, trimmed]);
+    setNewDeptName('');
+    setNewDeptOrg('');
+    setIsAddDeptModalOpen(false);
+    showAlert('Success', `Department "${trimmed}" registered.`);
   };
 
   const handleSelectAll = (e) => {
@@ -449,9 +479,9 @@ export default function AdminDashboard() {
         ...targetEmp,
         name: targetEmp.name || targetEmp.full_name || '',
         organization: targetEmp.organization || '',
+        department: targetEmp.department || '',
         employee_id: targetEmp.employee_id || '',
         job_title: targetEmp.job_title || '',
-        department: targetEmp.department || '',
         manager: targetEmp.manager || '',
         city: targetEmp.city || '',
         country: targetEmp.country || '',
@@ -491,7 +521,6 @@ export default function AdminDashboard() {
         .from('profiles')
         .delete()
         .or(`id.eq.${targetId},email.ilike.${targetEmail}`);
-
       if (userErr) throw userErr;
 
       showAlert(
@@ -517,7 +546,6 @@ export default function AdminDashboard() {
         .delete()
         .eq('id', deleteWorkflowTarget.id);
       if (error) throw error;
-
       showAlert(
         'Success',
         `Workflow step "${deleteWorkflowTarget.title || deleteWorkflowTarget.testTitle}" has been deleted.`
@@ -541,9 +569,9 @@ export default function AdminDashboard() {
           email: editingUser.email.toLowerCase().trim(),
           role: editingUser.role,
           organization: editingUser.organization ? editingUser.organization.trim() : null,
+          department: editingUser.department ? editingUser.department.trim() : null,
           employee_id: editingUser.employee_id ? editingUser.employee_id.trim() : null,
           job_title: editingUser.job_title ? editingUser.job_title.trim() : null,
-          department: editingUser.department ? editingUser.department.trim() : null,
           manager: editingUser.manager ? editingUser.manager.trim() : null,
           city: editingUser.city ? editingUser.city.trim() : null,
           country: editingUser.country ? editingUser.country.trim() : null,
@@ -585,9 +613,9 @@ export default function AdminDashboard() {
     e.preventDefault();
     const trimmedEmail = newEmp.email.trim().toLowerCase();
     const trimmedOrg = newEmp.organization ? newEmp.organization.trim() : null;
+    const trimmedDept = newEmp.department ? newEmp.department.trim() : null;
 
     try {
-      // 1. Check if profile with email already exists
       const { data: existingUser } = await supabase
         .from('profiles')
         .select('id')
@@ -605,7 +633,6 @@ export default function AdminDashboard() {
           return;
         }
 
-        // Insert directly into profiles table (No email API triggers)
         const { data: profileData, error: profileError } = await supabase
           .from('profiles')
           .insert({
@@ -613,14 +640,13 @@ export default function AdminDashboard() {
             email: trimmedEmail,
             role: 'EXECUTIVE',
             organization: trimmedOrg,
-            department: newEmp.department || null,
+            department: trimmedDept,
           })
           .select()
           .single();
 
         if (profileError) throw profileError;
 
-        // Store pre-assigned executive password
         const { error: credError } = await supabase
           .from('executive_credentials')
           .insert({
@@ -637,8 +663,6 @@ export default function AdminDashboard() {
           `Executive account record created for ${trimmedEmail}. The user can log in with their pre-assigned password.`
         );
       } else {
-        // Direct Database Record creation for CANDIDATE, MANAGER, or ADMIN
-        // No emails/invites sent. Users can sign up directly using this registered email.
         const { error: insertError } = await supabase
           .from('profiles')
           .insert({
@@ -646,14 +670,14 @@ export default function AdminDashboard() {
             email: trimmedEmail,
             role: newEmp.role,
             organization: trimmedOrg,
-            department: newEmp.department || null,
+            department: trimmedDept,
           });
 
         if (insertError) throw insertError;
 
         showAlert(
           'Record Created',
-          `Profile for ${trimmedEmail} saved to database without sending an email. They can now create their account on the sign-up page.`
+          `Profile for ${trimmedEmail} saved to database without sending an email.`
         );
       }
 
@@ -678,7 +702,6 @@ export default function AdminDashboard() {
     if (!file) return;
     setUploadFileName(file.name);
     const reader = new FileReader();
-
     reader.onload = (evt) => {
       try {
         const data = new Uint8Array(evt.target.result);
@@ -703,6 +726,7 @@ export default function AdminDashboard() {
           const email = (nRow['email'] || '').toLowerCase();
           const role = (nRow['role'] || 'CANDIDATE').toUpperCase();
           const parsedOrg = nRow['organization'] || nRow['org'] || nRow['company'] || '';
+          const parsedDept = nRow['department'] || nRow['dept'] || '';
 
           if (!email || !email.includes('@')) continue;
 
@@ -711,9 +735,9 @@ export default function AdminDashboard() {
             email: email,
             role: ['EXECUTIVE', 'ADMIN', 'MANAGER'].includes(role) ? role : 'CANDIDATE',
             organization: parsedOrg || null,
+            department: parsedDept || null,
             employee_id: nRow['employee id'] || nRow['employeeid'] || null,
             job_title: nRow['job title'] || nRow['jobtitle'] || null,
-            department: nRow['department'] || null,
             manager: nRow['manager'] || null,
             city: nRow['city'] || null,
             country: nRow['country'] || nRow['location'] || null,
@@ -738,6 +762,7 @@ export default function AdminDashboard() {
           setUploadFileName('');
           return;
         }
+
         setParsedUsers(parsedList);
       } catch (err) {
         showAlert('Parsing Error', err.message || 'Failed to read spreadsheet file.');
@@ -753,21 +778,16 @@ export default function AdminDashboard() {
 
   const handleBulkInsert = async () => {
     if (parsedUsers.length === 0) return;
-
     const finalUsersToInsert = parsedUsers.map((u) => ({
       ...u,
       organization: u.organization ? u.organization : bulkDefaultOrg.trim() || null,
     }));
 
     const { data, error } = await supabase.from('profiles').insert(finalUsersToInsert).select();
-
     if (error) {
       showAlert('Bulk Import Error', error.message);
     } else if (!data || data.length === 0) {
-      showAlert(
-        'Database Write Blocked',
-        'Database accepted the command but inserted 0 records.'
-      );
+      showAlert('Database Write Blocked', 'Database accepted command but inserted 0 records.');
     } else {
       showAlert('Success', `Successfully imported ${data.length} users into Supabase.`);
       setIsUploadModalOpen(false);
@@ -799,14 +819,10 @@ export default function AdminDashboard() {
     });
 
     const { data, error } = await supabase.from('workflow_steps').insert(newAssignments).select();
-
     if (error) {
       showAlert('Assignment Error', error.message);
     } else if (!data || data.length === 0) {
-      showAlert(
-        'Database Write Blocked',
-        'Assignment not saved. Check RLS policies on workflow_steps table.'
-      );
+      showAlert('Database Write Blocked', 'Assignment not saved.');
     } else {
       showAlert(
         'Success',
@@ -844,14 +860,10 @@ export default function AdminDashboard() {
     });
 
     const { data, error } = await supabase.from('workflow_steps').insert(newAssignments).select();
-
     if (error) {
       showAlert('Bulk Assign Error', error.message);
     } else if (!data || data.length === 0) {
-      showAlert(
-        'Database Write Blocked',
-        'Assignments not saved. Check RLS policies on workflow_steps table.'
-      );
+      showAlert('Database Write Blocked', 'Assignments not saved.');
     } else {
       showAlert(
         'Success',
@@ -874,6 +886,7 @@ export default function AdminDashboard() {
     setColumnFilters({
       nameEmail: '',
       organization: 'ALL',
+      department: 'ALL',
       status: 'ALL',
       role: 'ALL',
       workflow: 'ALL',
@@ -899,6 +912,7 @@ export default function AdminDashboard() {
   const isAnyFilterActive =
     columnFilters.nameEmail !== '' ||
     columnFilters.organization !== 'ALL' ||
+    columnFilters.department !== 'ALL' ||
     columnFilters.status !== 'ALL' ||
     columnFilters.role !== 'ALL' ||
     columnFilters.workflow !== 'ALL' ||
@@ -974,6 +988,66 @@ export default function AdminDashboard() {
         </div>
       )}
 
+      {/* Add Department Modal */}
+      {isAddDeptModalOpen && (
+        <div className="fixed inset-0 bg-[#1F1F3B]/40 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4 border border-[#EEEEF4]">
+            <div className="flex justify-between items-center border-b border-[#EEEEF4] pb-3">
+              <div className="flex items-center gap-2">
+                <Briefcase className="w-5 h-5 text-[#1F1F3B]" />
+                <h3 className="font-bold text-[#1F1F3B] text-sm">Add Department</h3>
+              </div>
+              <button onClick={() => setIsAddDeptModalOpen(false)} className="cursor-pointer">
+                <X className="w-4 h-4 text-[#A6A1B6]" />
+              </button>
+            </div>
+            <form onSubmit={handleAddDepartment} className="space-y-4 text-xs">
+              <div>
+                <label className="block font-bold mb-1 text-[#1F1F3B]">Department Name *</label>
+                <input
+                  required
+                  type="text"
+                  value={newDeptName}
+                  onChange={(e) => setNewDeptName(e.target.value)}
+                  placeholder="e.g. HR, Supply Chain, Logistics, Finance"
+                  className="w-full p-2.5 bg-[#F7F9FB] border border-[#D3CCDE] rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-[#1F1F3B]"
+                />
+              </div>
+              <div>
+                <label className="block font-bold mb-1 text-[#1F1F3B]">Assign Organization</label>
+                <select
+                  value={newDeptOrg}
+                  onChange={(e) => setNewDeptOrg(e.target.value)}
+                  className="w-full p-2.5 bg-[#F7F9FB] border border-[#D3CCDE] rounded-xl text-xs font-semibold text-[#1F1F3B]"
+                >
+                  <option value="">-- Select Organization --</option>
+                  {availableOrganizations.map((org) => (
+                    <option key={org} value={org}>
+                      {org}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex items-center gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsAddDeptModalOpen(false)}
+                  className="w-1/2 py-2.5 bg-[#EEEEF4] text-[#4C4B64] font-bold rounded-xl text-xs cursor-pointer hover:bg-[#E5E3ED] transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="w-1/2 py-2.5 bg-[#1F1F3B] text-white font-bold rounded-xl text-xs cursor-pointer hover:bg-[#363550] transition-colors"
+                >
+                  Save Department
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Delete User Modal */}
       {deleteStage > 0 && deleteTarget && (
         <div className="fixed inset-0 bg-[#1F1F3B]/50 backdrop-blur-xs flex items-center justify-center z-50 p-4">
@@ -1016,11 +1090,7 @@ export default function AdminDashboard() {
                     Final Warning (Confirmation 2 of 2)
                   </h3>
                   <p className="text-xs text-[#4C4B64] leading-relaxed">
-                    This action will <b>permanently erase</b> all profile data and workflows directly
-                    in Supabase.
-                  </p>
-                  <p className="text-[11px] font-bold text-rose-700 bg-rose-50 p-2.5 rounded-xl border border-rose-200">
-                    This process cannot be undone. Are you absolutely certain?
+                    This action will <b>permanently erase</b> all profile data and workflows directly in Supabase.
                   </p>
                 </div>
                 <div className="flex items-center gap-2 pt-2">
@@ -1082,9 +1152,7 @@ export default function AdminDashboard() {
               <div className="flex items-center gap-2">
                 <Edit3 className="w-5 h-5 text-[#1F1F3B]" />
                 <div>
-                  <h3 className="font-bold text-[#1F1F3B] text-sm">
-                    Personal Information Profile
-                  </h3>
+                  <h3 className="font-bold text-[#1F1F3B] text-sm">Personal Information Profile</h3>
                   <p className="text-[11px] text-[#79768D]">View and edit user profile details</p>
                 </div>
               </div>
@@ -1107,9 +1175,7 @@ export default function AdminDashboard() {
                     />
                   </div>
                   <div>
-                    <label className="block font-semibold mb-1 text-[#4C4B64]">
-                      Email Address *
-                    </label>
+                    <label className="block font-semibold mb-1 text-[#4C4B64]">Email Address *</label>
                     <input
                       required
                       type="email"
@@ -1119,14 +1185,13 @@ export default function AdminDashboard() {
                     />
                   </div>
                 </div>
+
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block font-semibold mb-1 text-[#4C4B64]">Organization</label>
                     <select
                       value={editingUser.organization || ''}
-                      onChange={(e) =>
-                        setEditingUser({ ...editingUser, organization: e.target.value })
-                      }
+                      onChange={(e) => setEditingUser({ ...editingUser, organization: e.target.value })}
                       className="w-full p-2 bg-white border border-[#D3CCDE] rounded-xl font-semibold text-[#1F1F3B]"
                     >
                       <option value="">-- Select Organization --</option>
@@ -1137,6 +1202,19 @@ export default function AdminDashboard() {
                       ))}
                     </select>
                   </div>
+                  <div>
+                    <label className="block font-semibold mb-1 text-[#4C4B64]">Department</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Finance, HR, Supply Chain"
+                      value={editingUser.department || ''}
+                      onChange={(e) => setEditingUser({ ...editingUser, department: e.target.value })}
+                      className="w-full p-2 bg-white border border-[#D3CCDE] rounded-xl font-semibold text-[#1F1F3B]"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block font-semibold mb-1 text-[#4C4B64]">Role *</label>
                     <select
@@ -1151,18 +1229,15 @@ export default function AdminDashboard() {
                     </select>
                   </div>
                 </div>
+
                 {editingUser.role === 'EXECUTIVE' && (
                   <div>
-                    <label className="block font-semibold mb-1 text-[#4C4B64]">
-                      Assigned Password
-                    </label>
+                    <label className="block font-semibold mb-1 text-[#4C4B64]">Assigned Password</label>
                     <div className="relative">
                       <input
                         type={showEditPassword ? 'text' : 'password'}
                         value={editingUser.password || ''}
-                        onChange={(e) =>
-                          setEditingUser({ ...editingUser, password: e.target.value })
-                        }
+                        onChange={(e) => setEditingUser({ ...editingUser, password: e.target.value })}
                         placeholder="Executive password"
                         className="w-full p-2 pr-10 bg-white border border-[#D3CCDE] rounded-xl font-mono text-xs"
                       />
@@ -1171,16 +1246,13 @@ export default function AdminDashboard() {
                         onClick={() => setShowEditPassword(!showEditPassword)}
                         className="absolute right-3 top-1/2 -translate-y-1/2 text-[#A6A1B6] hover:text-[#4C4B64] cursor-pointer"
                       >
-                        {showEditPassword ? (
-                          <EyeOff className="w-4 h-4" />
-                        ) : (
-                          <Eye className="w-4 h-4" />
-                        )}
+                        {showEditPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                       </button>
                     </div>
                   </div>
                 )}
               </div>
+
               <div className="flex items-center gap-2 pt-2 border-t border-[#EEEEF4]">
                 <button
                   type="button"
@@ -1245,9 +1317,7 @@ export default function AdminDashboard() {
                           onChange={() => {
                             const idStr = String(t.id);
                             setSelectedWorkflowIds((prev) =>
-                              prev.includes(idStr)
-                                ? prev.filter((id) => id !== idStr)
-                                : [...prev, idStr]
+                              prev.includes(idStr) ? prev.filter((id) => id !== idStr) : [...prev, idStr]
                             );
                           }}
                           className="rounded border-[#D3CCDE] text-[#1F1F3B] focus:ring-[#1F1F3B] cursor-pointer"
@@ -1327,9 +1397,7 @@ export default function AdminDashboard() {
                           onChange={() => {
                             const idStr = String(t.id);
                             setBulkSelectedWorkflowIds((prev) =>
-                              prev.includes(idStr)
-                                ? prev.filter((id) => id !== idStr)
-                                : [...prev, idStr]
+                              prev.includes(idStr) ? prev.filter((id) => id !== idStr) : [...prev, idStr]
                             );
                           }}
                           className="rounded border-[#D3CCDE] text-[#1F1F3B] focus:ring-[#1F1F3B] cursor-pointer"
@@ -1401,9 +1469,7 @@ export default function AdminDashboard() {
                 />
               </div>
               <div>
-                <label className="block font-bold mb-1 text-[#4C4B64]">
-                  Organization / Company
-                </label>
+                <label className="block font-bold mb-1 text-[#4C4B64]">Organization / Company</label>
                 <select
                   value={newEmp.organization}
                   onChange={(e) => setNewEmp({ ...newEmp, organization: e.target.value })}
@@ -1416,6 +1482,16 @@ export default function AdminDashboard() {
                     </option>
                   ))}
                 </select>
+              </div>
+              <div>
+                <label className="block font-bold mb-1 text-[#4C4B64]">Department</label>
+                <input
+                  type="text"
+                  value={newEmp.department}
+                  onChange={(e) => setNewEmp({ ...newEmp, department: e.target.value })}
+                  placeholder="e.g. HR, Logistics, Finance"
+                  className="w-full p-2 bg-[#F7F9FB] border border-[#D3CCDE] rounded-xl"
+                />
               </div>
               <div>
                 <label className="block font-bold mb-1 text-[#4C4B64]">User Access Role</label>
@@ -1433,9 +1509,7 @@ export default function AdminDashboard() {
 
               {newEmp.role === 'EXECUTIVE' && (
                 <div>
-                  <label className="block font-bold mb-1 text-[#4C4B64]">
-                    Assigned Password
-                  </label>
+                  <label className="block font-bold mb-1 text-[#4C4B64]">Assigned Password</label>
                   <div className="relative">
                     <input
                       required
@@ -1450,24 +1524,10 @@ export default function AdminDashboard() {
                       onClick={() => setShowModalPassword(!showModalPassword)}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-[#A6A1B6] hover:text-[#4C4B64] cursor-pointer"
                     >
-                      {showModalPassword ? (
-                        <EyeOff className="w-4 h-4" />
-                      ) : (
-                        <Eye className="w-4 h-4" />
-                      )}
+                      {showModalPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
                 </div>
-              )}
-
-              {newEmp.role !== 'EXECUTIVE' ? (
-                <p className="text-[11px] text-[#1F1F3B] bg-[#E5E3ED] p-2.5 rounded-xl border border-[#D3CCDE] font-medium">
-                  No email will be sent. User details will be stored in Supabase. The user can create their password on the sign-up page using this exact email address.
-                </p>
-              ) : (
-                <p className="text-[11px] text-[#1F1F3B] bg-[#E5E3ED] p-2.5 rounded-xl border border-[#D3CCDE] font-medium">
-                  Executive record and credentials will be added directly. No emails will be sent; executives log in using their assigned password.
-                </p>
               )}
 
               <button
@@ -1600,7 +1660,7 @@ export default function AdminDashboard() {
           </div>
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2 px-3.5 py-1.5 border border-[#EEEEF4] rounded-full text-xs text-[#4C4B64] bg-[#F7F9FB]">
-              <UserIcon className="w-3.5 h-3.5 text-[#A6A1B6]" />
+              <Usericon className="w-3.5 h-3.5 text-[#A6A1B6]" />
               <span>{currentUser.email}</span>
             </div>
             <button
@@ -1618,7 +1678,7 @@ export default function AdminDashboard() {
       <main className="w-full max-w-[98%] mx-auto px-4 py-8 space-y-6 flex-1">
         <div className="space-y-1">
           <h1 className="text-3xl font-extrabold text-[#1F1F3B] tracking-tight">
-            Welcome, {currentUser.name ? currentUser.name.split(' ')[0] : 'User'}
+            Welcome, {currentUser?.name ? currentUser.name.split(' ')[0] : 'User'}
           </h1>
           <p className="text-sm font-normal text-[#79768D]">
             Manage employees, workflows, and organizational insights.
@@ -1628,12 +1688,17 @@ export default function AdminDashboard() {
         <div className="space-y-4">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-[#EEEEF4] shadow-xs">
             <div>
-              <h2 className="text-base font-bold text-[#1F1F3B]">
-                User Directory & Assignments
-              </h2>
+              <h2 className="text-base font-bold text-[#1F1F3B]">User Directory & Assignments</h2>
               <p className="text-xs text-[#79768D]">Live directory synced with Supabase database.</p>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
+              <button
+                onClick={() => setIsAddDeptModalOpen(true)}
+                className="px-4 py-2 bg-[#F3F4F8] text-[#1F1F3B] border border-[#D3CCDE] hover:bg-[#E5E3ED] font-bold text-xs rounded-xl flex items-center gap-2 cursor-pointer transition-colors"
+              >
+                <Briefcase className="w-4 h-4 text-[#1F1F3B]" />
+                <span>Add Department</span>
+              </button>
               <button
                 onClick={() => setIsAddOrgModalOpen(true)}
                 className="px-4 py-2 bg-[#F3F4F8] text-[#1F1F3B] border border-[#D3CCDE] hover:bg-[#E5E3ED] font-bold text-xs rounded-xl flex items-center gap-2 cursor-pointer transition-colors"
@@ -1780,6 +1845,24 @@ export default function AdminDashboard() {
                         {dynamicOptions.orgs.map((org) => (
                           <option key={org} value={org}>
                             {org}
+                          </option>
+                        ))}
+                      </select>
+                    </th>
+                    <th className="py-2.5 px-2.5 align-top min-w-[130px]">
+                      <div className="mb-1.5">DEPARTMENT</div>
+                      <select
+                        value={columnFilters.department}
+                        onChange={(e) =>
+                          setColumnFilters({ ...columnFilters, department: e.target.value })
+                        }
+                        className="w-full p-1 bg-white border border-[#D3CCDE] rounded-lg text-[11px] font-semibold text-[#1F1F3B] normal-case outline-none cursor-pointer"
+                      >
+                        <option value="ALL">All Depts</option>
+                        <option value="UNASSIGNED">Unassigned</option>
+                        {dynamicOptions.depts.map((dept) => (
+                          <option key={dept} value={dept}>
+                            {dept}
                           </option>
                         ))}
                       </select>
@@ -2032,7 +2115,6 @@ export default function AdminDashboard() {
                       (a) => a.status === 'COMPLETED' || a.status === 'APPROVED'
                     );
                     const isSelected = selectedEmpIds.includes(emp.id);
-
                     return (
                       <tr
                         key={emp.id}
@@ -2058,6 +2140,15 @@ export default function AdminDashboard() {
                           {emp.organization && emp.organization.trim() ? (
                             <span className="px-1.5 py-0.5 bg-[#EEEEF4] text-[#1F1F3B] font-semibold rounded border border-[#D3CCDE] text-[10px]">
                               {emp.organization.trim()}
+                            </span>
+                          ) : (
+                            <span className="text-[#A6A1B6] italic text-[10px]">Unassigned</span>
+                          )}
+                        </td>
+                        <td className="py-3 px-2.5 whitespace-nowrap">
+                          {emp.department && emp.department.trim() ? (
+                            <span className="px-1.5 py-0.5 bg-[#EEEEF4] text-[#1F1F3B] font-semibold rounded border border-[#D3CCDE] text-[10px]">
+                              {emp.department.trim()}
                             </span>
                           ) : (
                             <span className="text-[#A6A1B6] italic text-[10px]">Unassigned</span>
@@ -2096,15 +2187,10 @@ export default function AdminDashboard() {
                         <td className="py-3 px-2.5">
                           <div className="space-y-1.5">
                             {userSteps.length === 0 ? (
-                              <span className="text-[#A6A1B6] text-[10px]">
-                                No workflows assigned
-                              </span>
+                              <span className="text-[#A6A1B6] text-[10px]">No workflows assigned</span>
                             ) : (
                               userSteps.map((asg) => (
-                                <div
-                                  key={asg.id}
-                                  className="flex items-center justify-between gap-2 group"
-                                >
+                                <div key={asg.id} className="flex items-center justify-between gap-2 group">
                                   <span className="font-semibold text-[#1F1F3B] text-[11px]">
                                     {asg.workflows?.title || asg.title || asg.testTitle}
                                   </span>
@@ -2129,9 +2215,7 @@ export default function AdminDashboard() {
                             <span className="text-[#A6A1B6] italic">N/A</span>
                           ) : (
                             userSteps.map((asg) => (
-                              <div key={asg.id}>
-                                {asg.assigned_date || asg.assignedDate || 'N/A'}
-                              </div>
+                              <div key={asg.id}>{asg.assigned_date || asg.assignedDate || 'N/A'}</div>
                             ))
                           )}
                         </td>
@@ -2200,8 +2284,7 @@ export default function AdminDashboard() {
                                 >
                                   <LayoutGrid className="w-3 h-3 text-[#D3CCDE]" />
                                   <span>
-                                    Open Dashboard{' '}
-                                    {completedSteps.length > 1 ? `#${index + 1}` : ''}
+                                    Open Dashboard{completedSteps.length > 1 ? ` #${index + 1}` : ''}
                                   </span>
                                 </button>
                               ))}

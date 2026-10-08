@@ -1,931 +1,808 @@
 'use client';
 
-import PortalShell from '../../components/PortalShell';
-import { useEffect, useState } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import { createClient } from '../../../lib/supabase/client';
 import {
-  AlertTriangle,
-  ArrowUpRight,
+  CheckCircle2,
+  Clock,
+  ClipboardList,
+  Inbox,
+  Send,
+  LogOut,
+  HelpCircle,
+  AlertCircle,
+  Lock,
   ChevronRight,
-  ChevronDown as MapChevron,
-  Network as MapIcon,
+  UserCheck,
+  Building2,
+  Layers
 } from 'lucide-react';
 
-// Dynamic Process Map Component
-function ProcessMap({ steps = [], selectedStep, setSelectedStep }) {
-  if (!steps || steps.length === 0) {
-    return (
-      <div className="rounded-xl border border-dashed border-[#E5E3ED] p-6 text-center text-xs text-[#79768D] font-sans">
-        No process map steps recorded for this department.
-      </div>
-    );
-  }
+const AI_TOOLS = [
+  'ChatGPT',
+  'Claude',
+  'Notion AI',
+  'Copilot',
+  'Excel AI',
+  'Gemini',
+  'Custom Agent',
+  'Perplexity'
+];
 
-  return (
-    <div className="space-y-4 rounded-xl border border-[#E5E3ED] bg-[#EEEEF4]/40 p-4 font-sans">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {steps.map((step, idx) => {
-          const isSelected =
-            selectedStep?.id === step.id ||
-            selectedStep?.name === step.name ||
-            selectedStep?.title === step.title;
-          return (
-            <div
-              key={step.id || idx}
-              onClick={() => setSelectedStep(step)}
-              className={`cursor-pointer rounded-lg border p-3.5 transition-all ${
-                isSelected
-                  ? 'border-[#1F1F3B] bg-white shadow-xs ring-1 ring-[#1F1F3B]'
-                  : 'border-[#E5E3ED] bg-white hover:border-[#79768D]'
-              }`}
-            >
-              <div className="flex items-center justify-between text-xs font-semibold text-[#79768D]">
-                <span>Step {step.step_number || idx + 1}</span>
-                {(step.time || step.duration) && (
-                  <span className="text-[11px] text-[#79768D]">
-                    {step.time || step.duration}
-                  </span>
-                )}
-              </div>
-              <h4 className="mt-1 font-serif text-[#1F1F3B] text-sm">
-                {step.title || step.name || step.step_name || 'Process Step'}
-              </h4>
-              {(step.performer || step.role) && (
-                <p className="mt-1 text-xs text-[#79768D]">
-                  Performer: {step.performer || step.role}
-                </p>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      {selectedStep && (
-        <div className="rounded-lg border border-[#D3CCDE] bg-[#EEEEF4] p-4 text-xs text-[#1F1F3B] font-sans">
-          <p className="font-bold text-[#1F1F3B] font-serif">
-            {selectedStep.title || selectedStep.name || selectedStep.step_name}
-          </p>
-          {(selectedStep.description || selectedStep.detail) && (
-            <p className="mt-1 text-[#4C4B64]">
-              {selectedStep.description || selectedStep.detail}
-            </p>
-          )}
-          {(selectedStep.tools || selectedStep.ai_tools) && (
-            <p className="mt-2 text-[#1F1F3B] font-medium">
-              Tools:{' '}
-              {Array.isArray(selectedStep.tools || selectedStep.ai_tools)
-                ? (selectedStep.tools || selectedStep.ai_tools).join(', ')
-                : selectedStep.tools || selectedStep.ai_tools}
-            </p>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function DepartmentProcessMap({ deptName, deptId }) {
-  const supabase = createClient();
-  const [open, setOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [mapData, setMapData] = useState(null);
-  const [selectedStep, setSelectedStep] = useState(null);
-
-  useEffect(() => {
-    if (!open) return;
-    async function fetchProcessMap() {
-      setLoading(true);
-      let query = supabase.from('process_maps').select('*');
-      if (deptId) {
-        query = query.eq('department_id', deptId);
-      } else {
-        query = query.ilike('department_name', deptName);
-      }
-      const { data } = await query.maybeSingle();
-      if (data) {
-        const steps =
-          data.steps ||
-          data.process_steps ||
-          (typeof data.process_data === 'string'
-            ? JSON.parse(data.process_data)
-            : data.process_data) ||
-          [];
-        setMapData({
-          owner: data.owner || data.process_owner || deptName,
-          workflow: data.workflow || data.workflow_name || 'Workflow Overview',
-          steps: Array.isArray(steps) ? steps : [],
-        });
-      } else {
-        setMapData({
-          owner: deptName,
-          workflow: 'Standard Operational Flow',
-          steps: [],
-        });
-      }
-      setLoading(false);
-    }
-    fetchProcessMap();
-  }, [open, deptName, deptId, supabase]);
-
-  return (
-    <div className="border-t border-[#E5E3ED] font-sans">
-      <button
-        type="button"
-        aria-expanded={open}
-        onClick={() => setOpen((prev) => !prev)}
-        className="flex w-full items-center justify-between gap-3 px-5 py-4 text-left transition-colors hover:bg-[#F7F9FB] sm:px-6 cursor-pointer"
-      >
-        <span className="flex items-center gap-2 font-semibold text-[#1F1F3B]">
-          <MapIcon className="h-4 w-4 text-[#1F1F3B]" />
-          Process map
-          <span className="hidden text-sm font-normal text-[#79768D] sm:inline">
-            — {mapData?.owner || deptName} ({mapData?.workflow || 'Overview'})
-          </span>
-        </span>
-        <MapChevron
-          className={`h-5 w-5 text-[#79768D] transition-transform ${
-            open ? 'rotate-180' : ''
-          }`}
-        />
-      </button>
-
-      {open && (
-        <div className="px-5 pb-5 sm:px-6 sm:pb-6">
-          <p className="mb-3 text-sm text-[#79768D]">
-            Click a step for performer, time, and AI tools.
-          </p>
-          {loading ? (
-            <div className="py-6 text-center text-xs text-[#79768D]">
-              Loading process map details...
-            </div>
-          ) : (
-            <ProcessMap
-              steps={mapData?.steps}
-              selectedStep={selectedStep}
-              setSelectedStep={setSelectedStep}
-            />
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function Stat({ label, value, sub, trend }) {
-  return (
-    <div className="bg-white p-5 rounded-2xl border border-[#E5E3ED] shadow-xs flex flex-col justify-between">
-      <p className="text-[10px] font-bold text-[#79768D] uppercase tracking-wider">
-        {label}
-      </p>
-      <p
-        className="text-3xl font-normal text-[#1F1F3B] mt-2"
-        style={{ fontFamily: "'Marcellus', serif" }}
-      >
-        {value ?? '-'}
-      </p>
-      {sub && <p className="text-xs text-[#79768D] mt-1">{sub}</p>}
-      {trend && (
-        <p className="text-xs text-emerald-600 font-medium mt-1">
-          {trend === 'up' ? '▲ Trending Up' : trend}
-        </p>
-      )}
-    </div>
-  );
-}
-
-function performanceTone(value) {
-  if (value >= 75) {
-    return {
-      badge: 'bg-emerald-600 text-white',
-      surface: 'bg-emerald-50/40',
-      border: 'border-l-emerald-600',
-    };
-  }
-  if (value >= 60) {
-    return {
-      badge: 'bg-[#1F1F3B] text-white',
-      surface: 'bg-[#EEEEF4]/40',
-      border: 'border-l-[#1F1F3B]',
-    };
-  }
-  if (value >= 50) {
-    return {
-      badge: 'bg-amber-500 text-white',
-      surface: 'bg-amber-50/40',
-      border: 'border-l-amber-500',
-    };
-  }
-  return {
-    badge: 'bg-rose-600 text-white',
-    surface: 'bg-rose-50/40',
-    border: 'border-l-rose-600',
-  };
-}
-
-function TrendChart({ trendData = [] }) {
-  if (!trendData || trendData.length === 0) {
-    return (
-      <div className="h-[310px] flex items-center justify-center text-xs text-[#79768D]">
-        No trend data recorded.
-      </div>
-    );
-  }
-
-  const stepX = trendData.length > 1 ? 340 / (trendData.length - 1) : 0;
-  
-  const points = trendData
-    .map((item, index) => `${28 + index * stepX},${190 - (item.adoption || 0) * 1.55}`)
-    .join(' ');
-
-  const verified = trendData
-    .map((item, index) => `${28 + index * stepX},${190 - (item.verified || 0) * 1.55}`)
-    .join(' ');
-
-  const target = trendData
-    .map((item, index) => `${28 + index * stepX},${190 - (item.target || 0) * 1.55}`)
-    .join(' ');
-
-  const area = `28,190 ${points} ${28 + (trendData.length - 1) * stepX},190`;
-
-  return (
-    <div className="h-[310px] w-full" aria-label="Adoption and output trend chart">
-      <svg viewBox="0 0 400 250" className="h-full w-full" role="img">
-        {[35, 74, 113, 152, 190].map((y) => (
-          <line
-            key={y}
-            x1="28"
-            x2="368"
-            y1={y}
-            y2={y}
-            stroke="#E5E3ED"
-            strokeDasharray="3 3"
-          />
-        ))}
-        <polygon points={area} fill="#1F1F3B" opacity="0.08" />
-        <polyline
-          points={target}
-          fill="none"
-          stroke="#79768D"
-          strokeWidth="2"
-          strokeDasharray="6 5"
-        />
-        <polyline
-          points={verified}
-          fill="none"
-          stroke="#10B981"
-          strokeWidth="3"
-          strokeLinejoin="round"
-        />
-        <polyline
-          points={points}
-          fill="none"
-          stroke="#1F1F3B"
-          strokeWidth="3"
-          strokeLinejoin="round"
-        />
-        {trendData.map((item, index) => (
-          <circle
-            key={item.month || index}
-            cx={28 + index * stepX}
-            cy={190 - (item.verified || 0) * 1.55}
-            r="3"
-            fill="#10B981"
-          />
-        ))}
-        {trendData.map((item, index) => (
-          <text
-            key={item.month || index}
-            x={28 + index * stepX}
-            y="214"
-            textAnchor="middle"
-            fill="#79768D"
-            fontSize="11"
-          >
-            {item.month}
-          </text>
-        ))}
-        <g transform="translate(52 236)" fontSize="10" fill="#79768D">
-          <circle cx="0" cy="-3" r="4" fill="#1F1F3B" />
-          <text x="9">Adoption</text>
-          <circle cx="90" cy="-3" r="4" fill="#10B981" />
-          <text x="99">Verified</text>
-          <line
-            x1="174"
-            x2="192"
-            y1="-3"
-            y2="-3"
-            stroke="#79768D"
-            strokeDasharray="4 3"
-          />
-          <text x="198">Plan</text>
-        </g>
-      </svg>
-    </div>
-  );
-}
-
-function MaturityDonut({ stageData = [] }) {
-  if (!stageData || stageData.length === 0) {
-    return (
-      <div className="h-[220px] flex items-center justify-center text-xs text-[#79768D]">
-        No maturity stage data recorded.
-      </div>
-    );
-  }
-
-  let offset = 0;
-  const totalValue = stageData.reduce((acc, curr) => acc + (curr.value || 0), 0);
-
-  return (
-    <div
-      className="relative mx-auto h-[220px] w-full max-w-[250px]"
-      aria-label="Adoption maturity stage donut chart"
-    >
-      <svg viewBox="0 0 200 200" className="h-full w-full -rotate-90" role="img">
-        <circle
-          cx="100"
-          cy="100"
-          r="67"
-          fill="none"
-          stroke="#EEEEF4"
-          strokeWidth="28"
-        />
-        {stageData.map((stage) => {
-          const dash = (stage.value || 0) * 4.21;
-          const currentOffset = offset;
-          offset += dash;
-          return (
-            <circle
-              key={stage.name}
-              cx="100"
-              cy="100"
-              r="67"
-              fill="none"
-              stroke={stage.fill || '#1F1F3B'}
-              strokeWidth="28"
-              strokeDasharray={`${Math.max(0, dash - 5)} ${421 - Math.max(0, dash - 5)}`}
-              strokeDashoffset={-currentOffset}
-            />
-          );
-        })}
-      </svg>
-      <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-        <span
-          className="text-3xl font-normal text-[#1F1F3B]"
-          style={{ fontFamily: "'Marcellus', serif" }}
-        >
-          {totalValue}%
-        </span>
-        <span className="text-xs text-[#79768D]">total tracked</span>
-      </div>
-    </div>
-  );
-}
-
-function CapabilityRadar({ capabilityData = [] }) {
-  if (!capabilityData || capabilityData.length === 0) {
-    return (
-      <div className="h-[300px] flex items-center justify-center text-xs text-[#79768D]">
-        No capability scores recorded.
-      </div>
-    );
-  }
-
-  const center = 130;
-  const numItems = capabilityData.length;
-  const angleStep = 360 / numItems;
-
-  const point = (index, value) => {
-    const angle = ((-90 + index * angleStep) * Math.PI) / 180;
-    const radius = value * 0.82;
-    return `${center + Math.cos(angle) * radius},${center + Math.sin(angle) * radius}`;
-  };
-
-  const score = capabilityData
-    .map((item, index) => point(index, item.score || 0))
-    .join(' ');
-
-  const benchmark = capabilityData
-    .map((item, index) => point(index, item.benchmark || 0))
-    .join(' ');
-
-  return (
-    <div className="h-[300px] w-full" aria-label="Capability radar chart">
-      <svg viewBox="0 0 260 270" className="h-full w-full" role="img">
-        {[20, 40, 60, 80, 100].map((value) => (
-          <polygon
-            key={value}
-            points={capabilityData.map((_, index) => point(index, value)).join(' ')}
-            fill="none"
-            stroke="#E5E3ED"
-          />
-        ))}
-        {capabilityData.map((_, index) => {
-          const p = point(index, 100).split(',');
-          return (
-            <line
-              key={index}
-              x1={center}
-              y1={center}
-              x2={p[0]}
-              y2={p[1]}
-              stroke="#E5E3ED"
-            />
-          );
-        })}
-        <polygon
-          points={benchmark}
-          fill="none"
-          stroke="#F59E0B"
-          strokeWidth="2"
-          strokeDasharray="5 4"
-        />
-        <polygon
-          points={score}
-          fill="#1F1F3B"
-          fillOpacity="0.15"
-          stroke="#1F1F3B"
-          strokeWidth="2"
-        />
-        {capabilityData.map((item, index) => {
-          const p = point(index, 116).split(',');
-          return (
-            <text
-              key={item.capability || index}
-              x={p[0]}
-              y={p[1]}
-              textAnchor="middle"
-              dominantBaseline="middle"
-              fill="#79768D"
-              fontSize="10"
-            >
-              {item.capability}
-            </text>
-          );
-        })}
-        <g transform="translate(66 255)" fontSize="9" fill="#79768D">
-          <circle cx="0" cy="-3" r="4" fill="#1F1F3B" />
-          <text x="8">Current Score</text>
-          <circle cx="85" cy="-3" r="4" fill="#F59E0B" />
-          <text x="93">Benchmark</text>
-        </g>
-      </svg>
-    </div>
-  );
-}
-
-function DiscoveryUseCases({ discoveryUseCases = [] }) {
-  if (!discoveryUseCases || discoveryUseCases.length === 0) {
-    return (
-      <div className="py-6 text-center text-xs text-[#79768D]">
-        No discovery use cases recorded.
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-4 py-2" aria-label="Use cases summary">
-      {discoveryUseCases.map((item) => (
-        <div key={item.label || item.id}>
-          <div className="mb-2 flex items-center justify-between gap-4 text-xs">
-            <span className="font-medium text-[#1F1F3B]">{item.label}</span>
-            <strong>{item.share}% mentioned</strong>
-          </div>
-          <div className="h-2 overflow-hidden rounded-full bg-[#EEEEF4]">
-            <div
-              className="h-full rounded-full bg-[#1F1F3B]"
-              style={{ width: `${item.share}%` }}
-            />
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function ChartHeading({ eyebrow, title, detail }) {
-  return (
-    <div className="mb-5">
-      <p className="text-xs font-semibold uppercase tracking-wider text-[#1F1F3B]">
-        {eyebrow}
-      </p>
-      <h2
-        className="mt-1 text-2xl font-normal text-[#1F1F3B]"
-        style={{ fontFamily: "'Marcellus', serif" }}
-      >
-        {title}
-      </h2>
-      <p className="mt-1 text-sm leading-5 text-[#79768D]">{detail}</p>
-    </div>
-  );
-}
-
-export default function ExecutiveDashboardPage() {
-  const supabase = createClient();
-  const searchParams = useSearchParams();
+export default function CandidateDashboard() {
   const router = useRouter();
+  const supabase = createClient();
+
+  // Profile & Context States
+  const [profile, setProfile] = useState(null);
+  const [organization, setOrganization] = useState(null);
+  const [department, setDepartment] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [userProfile, setUserProfile] = useState({ email: '', role: '' });
-  const [executiveSummary, setExecutiveSummary] = useState(null);
-  const [dashboardData, setDashboardData] = useState({
-    departments: [],
-    trendData: [],
-    capabilityData: [],
-    stageData: [],
-    discoveryUseCases: [],
-    attentionItems: [],
-  });
+  const [activeTab, setActiveTab] = useState('home');
 
-  const view =
-    searchParams.get('tab') === 'departments' ? 'departments' : 'overview';
+  // Relational Dropdown Data States
+  const [assignedSteps, setAssignedSteps] = useState([]);
+  const [handoffs, setHandoffs] = useState([]);
+  const [departmentPeers, setDepartmentPeers] = useState([]);
+  const [departmentManagers, setDepartmentManagers] = useState([]);
 
-  useEffect(() => {
-    async function fetchDynamicData() {
-      setLoading(true);
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+  // Form Logging States
+  const [selectedStepId, setSelectedStepId] = useState('');
+  const [hours, setHours] = useState('');
+  const [selectedTools, setSelectedTools] = useState([]);
+  const [otherTool, setOtherTool] = useState('');
+  const [noAiReason, setNoAiReason] = useState('');
+  const [isFinalStep, setIsFinalStep] = useState(false);
+  const [handoffTarget, setHandoffTarget] = useState('');
+  const [deliverableSummary, setDeliverableSummary] = useState('');
+  const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
+  const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
 
-      if (user) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('role, email')
-          .eq('id', user.id)
-          .single();
+  // Alert Feedback
+  const [errorMsg, setErrorMsg] = useState('');
+  const [successMsg, setSuccessMsg] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-        setUserProfile({
-          email: user.email || profile?.email || '',
-          role: profile?.role || 'Executive',
-        });
+  // Load User, Organization, Department & Relational Data
+  const loadUserData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const { data: { session }, error: sessionErr } = await supabase.auth.getSession();
+      if (sessionErr || !session) {
+        router.push('/candidate-login');
+        return;
       }
 
-      const [
-        { data: summary },
-        { data: depts },
-        { data: trends },
-        { data: capabilities },
-        { data: stages },
-        { data: useCases },
-        { data: attention },
-      ] = await Promise.all([
-        supabase.from('executive_summaries').select('*').maybeSingle(),
-        supabase.from('departments').select('*'),
-        supabase
-          .from('adoption_trends')
-          .select('*')
-          .order('id', { ascending: true }),
-        supabase.from('capability_scores').select('*'),
-        supabase.from('adoption_stages').select('*'),
-        supabase.from('discovery_use_cases').select('*'),
-        supabase.from('attention_items').select('*'),
-      ]);
+      // 1. Fetch Current User Profile
+      const { data: profileData, error: profileErr } = await supabase
+        .from('profiles')
+        .select('*, organizations(*), departments(*)')
+        .eq('id', session.user.id)
+        .maybeSingle();
 
-      setExecutiveSummary(summary || null);
-      setDashboardData({
-        departments: depts || [],
-        trendData: trends || [],
-        capabilityData: capabilities || [],
-        stageData: stages || [],
-        discoveryUseCases: useCases || [],
-        attentionItems: attention || [],
-      });
+      if (profileErr) throw profileErr;
+      
+      const userProf = profileData || { 
+        id: session.user.id, 
+        email: session.user.email, 
+        full_name: 'Candidate' 
+      };
+      setProfile(userProf);
+      setOrganization(userProf.organizations || null);
+      setDepartment(userProf.departments || null);
+
+      // 2. Fetch Assigned Workflow Steps for this Performer
+      const { data: stepsData, error: stepsErr } = await supabase
+        .from('workflow_steps')
+        .select('*, workflows!inner(id, title, organization_id, department_id)')
+        .eq('performer_id', session.user.id)
+        .order('created_at', { ascending: false });
+
+      if (stepsErr) console.warn('Error fetching assigned steps:', stepsErr.message);
+      setAssignedSteps(stepsData || []);
+
+      // 3. Fetch Incoming Peer Handoffs
+      const { data: handoffData, error: handoffErr } = await supabase
+        .from('workflow_steps')
+        .select('*, assigner:profiles!workflow_steps_assigned_by_fkey(full_name, email, job_title)')
+        .eq('performer_id', session.user.id)
+        .eq('status', 'PENDING');
+
+      if (handoffErr) console.warn('Error fetching handoffs:', handoffErr.message);
+      setHandoffs(handoffData || []);
+
+      // 4. Fetch Department Peers & Managers Dynamically
+      if (userProf?.department_id) {
+        // Peer Candidates in the same Department
+        const { data: peersData } = await supabase
+          .from('profiles')
+          .select('id, full_name, email, job_title')
+          .eq('department_id', userProf.department_id)
+          .eq('role', 'candidate')
+          .neq('id', session.user.id);
+        setDepartmentPeers(peersData || []);
+
+        // Managers in the same Department
+        const { data: mgrData } = await supabase
+          .from('profiles')
+          .select('id, full_name, email, job_title')
+          .eq('department_id', userProf.department_id)
+          .eq('role', 'manager');
+        setDepartmentManagers(mgrData || []);
+      }
+    } catch (err) {
+      setErrorMsg(err.message || 'Failed to load user environment.');
+    } finally {
       setLoading(false);
     }
+  }, [supabase, router]);
 
-    fetchDynamicData();
-  }, [supabase]);
+  useEffect(() => {
+    loadUserData();
+  }, [loadUserData]);
+
+  // Derived Steps Lists
+  const pendingSteps = useMemo(
+    () => assignedSteps.filter((s) => s.status === 'PENDING' || !s.status),
+    [assignedSteps]
+  );
+  const completedSteps = useMemo(
+    () => assignedSteps.filter((s) => s.status === 'COMPLETED' || s.status === 'APPROVED'),
+    [assignedSteps]
+  );
+
+  // Tool Selection Helper
+  const toggleTool = (tool) => {
+    setErrorMsg('');
+    if (tool === 'No AI tools used') {
+      setSelectedTools(selectedTools.includes('No AI tools used') ? [] : ['No AI tools used']);
+      return;
+    }
+    let updated = selectedTools.filter((t) => t !== 'No AI tools used');
+    if (updated.includes(tool)) {
+      updated = updated.filter((t) => t !== tool);
+    } else {
+      updated.push(tool);
+    }
+    setSelectedTools(updated);
+  };
+
+  // Submit Completed Step & Process Handoff
+  const handleSubmitStep = async (e) => {
+    e.preventDefault();
+    setErrorMsg('');
+    setSuccessMsg('');
+
+    if (!selectedStepId) return setErrorMsg('Please select a workflow step.');
+    if (selectedTools.length === 0) return setErrorMsg('Please select at least one AI tool option.');
+    if (selectedTools.includes('No AI tools used') && !noAiReason.trim()) {
+      return setErrorMsg('Please specify why no AI tools were used.');
+    }
+    if (selectedTools.includes('Other') && !otherTool.trim()) {
+      return setErrorMsg('Please specify the custom AI tool.');
+    }
+    if (!hours || Number(hours) <= 0) return setErrorMsg('Please enter valid active hours.');
+    if (!handoffTarget) return setErrorMsg(isFinalStep ? 'Please select a manager for review.' : 'Please select a peer for handoff.');
+
+    setIsSubmitting(true);
+    try {
+      const currentStep = assignedSteps.find((s) => String(s.id) === String(selectedStepId));
+
+      const startTimeIso = new Date(startDate).toISOString();
+      const endTimeIso = new Date(endDate).toISOString();
+
+      // 1. Update Current Step Record
+      const { error: updateErr } = await supabase
+        .from('workflow_steps')
+        .update({
+          status: 'COMPLETED',
+          start_time: startTimeIso,
+          end_time: endTimeIso,
+          duration_hours: Number(hours),
+          deliverable_summary: deliverableSummary,
+          tools_tagged: selectedTools,
+          no_ai_reason: selectedTools.includes('No AI tools used') ? noAiReason : null,
+          other_tool: selectedTools.includes('Other') ? otherTool : null,
+          is_final_step: isFinalStep,
+          handoff_target_id: handoffTarget
+        })
+        .eq('id', selectedStepId);
+
+      if (updateErr) throw updateErr;
+
+      // 2. Dynamic Workflow Routing
+      if (isFinalStep) {
+        // Update main workflow status to PENDING_MANAGER_REVIEW for Manager/Executive dashboards
+        if (currentStep?.workflow_id) {
+          await supabase
+            .from('workflows')
+            .update({ status: 'PENDING_MANAGER_REVIEW' })
+            .eq('id', currentStep.workflow_id);
+        }
+        setSuccessMsg('Workflow step completed! Routed to Manager for final quality review.');
+      } else {
+        // Create next step in the sequence for the selected peer
+        await supabase.from('workflow_steps').insert({
+          workflow_id: currentStep?.workflow_id,
+          step_order: (currentStep?.step_order || 1) + 1,
+          task_name: `Handoff: ${currentStep?.task_name || 'Next Workflow Step'}`,
+          performer_id: handoffTarget,
+          assigned_by: profile.id,
+          status: 'PENDING'
+        });
+        setSuccessMsg('Step completed! Project handed off to colleague successfully.');
+      }
+
+      // Reset Inputs
+      setSelectedStepId('');
+      setHours('');
+      setSelectedTools([]);
+      setOtherTool('');
+      setNoAiReason('');
+      setDeliverableSummary('');
+      setHandoffTarget('');
+      setIsFinalStep(false);
+
+      await loadUserData();
+    } catch (err) {
+      setErrorMsg(err.message || 'Error submitting workflow step.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    sessionStorage.clear();
+    router.push('/candidate-login');
+  };
 
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center font-medium text-[#79768D] font-sans">
-        Loading Executive Intelligence...
+      <div className="min-h-screen flex items-center justify-center bg-[#EEEEF4] text-[#79768D] font-sans">
+        <span>Loading Candidate Portal...</span>
       </div>
     );
   }
 
   return (
-    <PortalShell email={userProfile.email} role={userProfile.role}>
-      {view === 'overview' && (
-        <>
-          <section id="overview" className="mb-8 scroll-mt-24">
-            <div className="flex flex-wrap items-end justify-between gap-4">
-              <div>
+    <div className="min-h-screen bg-[#F7F9FB] text-[#1F1F3B] font-sans flex flex-col antialiased">
+      {/* HEADER */}
+      <header className="bg-white border-b border-[#E5E3ED] sticky top-0 z-30 px-6 py-3.5 flex items-center justify-between">
+        <div className="flex items-center gap-6">
+          <Image src="/ivy-logo-dark.png" alt="IVY & COMPANY" width={120} height={32} priority />
+          <span className="text-[11px] font-bold tracking-widest text-[#79768D] uppercase border-l border-[#E5E3ED] pl-4 py-1">
+            Candidate Portal
+          </span>
+        </div>
+        <div className="flex items-center gap-5">
+          <div className="text-right hidden sm:block">
+            <p className="text-xs font-bold text-[#1F1F3B]">{profile?.full_name || 'Candidate'}</p>
+            <p className="text-[10px] text-[#79768D]">
+              {organization?.name || 'Organization'} &bull; {department?.name || 'Department'}
+            </p>
+          </div>
+          <button
+            onClick={handleLogout}
+            title="Log Out"
+            className="p-2 text-[#79768D] hover:text-[#1F1F3B] hover:bg-[#EEEEF4] rounded-xl transition-colors cursor-pointer"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
+        </div>
+      </header>
+
+      {/* PORTAL BODY */}
+      <div className="flex-1 max-w-7xl w-full mx-auto p-6 grid grid-cols-1 md:grid-cols-[240px_1fr] gap-8">
+        {/* SIDEBAR NAVIGATION */}
+        <aside className="space-y-2">
+          <button
+            onClick={() => setActiveTab('home')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              activeTab === 'home'
+                ? 'bg-[#1F1F3B] text-white shadow-xs'
+                : 'text-[#79768D] hover:bg-[#EEEEF4] hover:text-[#1F1F3B]'
+            }`}
+          >
+            <ClipboardList className="w-4 h-4" />
+            <span>Dashboard Overview</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('assignments')}
+            className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              activeTab === 'assignments'
+                ? 'bg-[#1F1F3B] text-white shadow-xs'
+                : 'text-[#79768D] hover:bg-[#EEEEF4] hover:text-[#1F1F3B]'
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              <Inbox className="w-4 h-4" />
+              <span>Pending Tasks</span>
+            </div>
+            {pendingSteps.length > 0 && (
+              <span className="bg-amber-500 text-white text-[10px] px-2 py-0.5 rounded-full font-bold">
+                {pendingSteps.length}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab('log-step')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              activeTab === 'log-step'
+                ? 'bg-[#1F1F3B] text-white shadow-xs'
+                : 'text-[#79768D] hover:bg-[#EEEEF4] hover:text-[#1F1F3B]'
+            }`}
+          >
+            <Send className="w-4 h-4" />
+            <span>Log Workflow Step</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('help')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              activeTab === 'help'
+                ? 'bg-[#1F1F3B] text-white shadow-xs'
+                : 'text-[#79768D] hover:bg-[#EEEEF4] hover:text-[#1F1F3B]'
+            }`}
+          >
+            <HelpCircle className="w-4 h-4" />
+            <span>Help & FAQ</span>
+          </button>
+        </aside>
+
+        {/* MAIN CONTENT AREA */}
+        <main className="space-y-6">
+          {/* TAB 1: OVERVIEW */}
+          {activeTab === 'home' && (
+            <div className="space-y-6 animate-in fade-in duration-200">
+              <div className="border-b border-[#E5E3ED] pb-5">
+                <p className="text-xs font-semibold text-[#79768D] uppercase tracking-wider">
+                  Welcome Back
+                </p>
                 <h1
-                  className="mt-2 max-w-3xl text-4xl font-normal leading-tight text-[#1F1F3B] sm:text-5xl"
+                  className="text-3xl font-normal text-[#1F1F3B] mt-1"
                   style={{ fontFamily: "'Marcellus', serif" }}
                 >
-                  {executiveSummary?.headline || 'Executive Overview'}
+                  {profile?.full_name || 'Candidate'}
                 </h1>
-                <p className="mt-3 max-w-2xl text-sm leading-6 text-[#79768D]">
-                  {executiveSummary?.description ||
-                    'Portfolio view across active operations and workflows.'}
-                </p>
-              </div>
-              {executiveSummary?.next_review_date && (
-                <div className="rounded-xl border border-[#E5E3ED] bg-white px-4 py-3 text-right shadow-xs">
-                  <p className="text-xs font-medium text-[#79768D]">
-                    Next leadership review
-                  </p>
-                  <p className="mt-1 text-sm font-semibold text-[#1F1F3B]">
-                    {executiveSummary.next_review_date}
-                  </p>
+                <div className="flex items-center gap-4 mt-2 text-xs text-[#79768D]">
+                  <span className="flex items-center gap-1">
+                    <Building2 className="w-3.5 h-3.5" />
+                    {organization?.name || 'Unassigned Organization'}
+                  </span>
+                  <span>&bull;</span>
+                  <span className="flex items-center gap-1">
+                    <Layers className="w-3.5 h-3.5" />
+                    {department?.name || 'Unassigned Department'}
+                  </span>
                 </div>
-              )}
-            </div>
-          </section>
+              </div>
 
-          {executiveSummary && (
-            <section
-              aria-label="Organization summary"
-              className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-5"
-            >
-              <Stat
-                label="Adoption Index"
-                value={executiveSummary.adoption_index}
-                sub={executiveSummary.adoption_sub}
-                trend={executiveSummary.adoption_trend}
-              />
-              <Stat
-                label="Verified Output"
-                value={executiveSummary.verified_output}
-                sub={executiveSummary.verified_sub}
-                trend={executiveSummary.verified_trend}
-              />
-              <Stat
-                label="Unlocked Capacity"
-                value={executiveSummary.unlocked_capacity}
-                sub={executiveSummary.capacity_sub}
-                trend={executiveSummary.capacity_trend}
-              />
-              <Stat
-                label="Value Realized"
-                value={executiveSummary.value_realized}
-                sub={executiveSummary.value_sub}
-                trend={executiveSummary.value_trend}
-              />
-              <Stat
-                label="Departments at Target"
-                value={executiveSummary.depts_at_target}
-                sub={executiveSummary.depts_target_sub}
-              />
-            </section>
+              {/* STAT CARDS */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div
+                  onClick={() => setActiveTab('assignments')}
+                  className="bg-white p-5 rounded-2xl border border-[#E5E3ED] shadow-xs hover:border-[#1F1F3B] transition-all cursor-pointer"
+                >
+                  <p className="text-[10px] font-bold text-[#79768D] uppercase tracking-wider">
+                    Pending Tasks
+                  </p>
+                  <p
+                    className="text-3xl font-normal text-[#1F1F3B] mt-2"
+                    style={{ fontFamily: "'Marcellus', serif" }}
+                  >
+                    {pendingSteps.length}
+                  </p>
+                  <div className="flex items-center justify-between text-xs text-[#79768D] mt-3">
+                    <span>Assigned workflow steps</span>
+                    <ChevronRight className="w-4 h-4" />
+                  </div>
+                </div>
+
+                <div
+                  onClick={() => setActiveTab('assignments')}
+                  className="bg-white p-5 rounded-2xl border border-[#E5E3ED] shadow-xs hover:border-[#1F1F3B] transition-all cursor-pointer"
+                >
+                  <p className="text-[10px] font-bold text-[#79768D] uppercase tracking-wider">
+                    Incoming Handoffs
+                  </p>
+                  <p
+                    className="text-3xl font-normal text-[#1F1F3B] mt-2"
+                    style={{ fontFamily: "'Marcellus', serif" }}
+                  >
+                    {handoffs.length}
+                  </p>
+                  <div className="flex items-center justify-between text-xs text-[#79768D] mt-3">
+                    <span>Awaiting execution</span>
+                    <ChevronRight className="w-4 h-4" />
+                  </div>
+                </div>
+
+                <div
+                  onClick={() => setActiveTab('log-step')}
+                  className="bg-white p-5 rounded-2xl border border-[#E5E3ED] shadow-xs hover:border-[#1F1F3B] transition-all cursor-pointer"
+                >
+                  <p className="text-[10px] font-bold text-[#79768D] uppercase tracking-wider">
+                    Completed Steps
+                  </p>
+                  <p
+                    className="text-3xl font-normal text-emerald-600 mt-2"
+                    style={{ fontFamily: "'Marcellus', serif" }}
+                  >
+                    {completedSteps.length}
+                  </p>
+                  <div className="flex items-center justify-between text-xs text-[#79768D] mt-3">
+                    <span>Logged executions</span>
+                    <ChevronRight className="w-4 h-4" />
+                  </div>
+                </div>
+              </div>
+
+              {/* INCOMING PEER HANDOFFS */}
+              <div className="space-y-3 pt-2">
+                <h2
+                  className="text-xl font-normal text-[#1F1F3B]"
+                  style={{ fontFamily: "'Marcellus', serif" }}
+                >
+                  Incoming Peer Handoffs
+                </h2>
+                {handoffs.length === 0 ? (
+                  <div className="bg-white p-6 rounded-2xl border border-[#E5E3ED] text-center text-xs text-[#79768D]">
+                    No active peer handoffs currently pending for your account.
+                  </div>
+                ) : (
+                  handoffs.map((h) => (
+                    <div
+                      key={h.id}
+                      className="bg-white p-5 rounded-2xl border-l-4 border-l-[#1F1F3B] border border-[#E5E3ED] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xs"
+                    >
+                      <div className="space-y-1">
+                        <p className="text-xs font-bold text-[#1F1F3B]">
+                          {h.assigner?.full_name || 'Department Colleague'} handed off a step
+                        </p>
+                        <p className="text-xs text-[#79768D]">
+                          Task: <span className="font-semibold text-[#1F1F3B]">{h.task_name}</span>
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setSelectedStepId(String(h.id));
+                          setActiveTab('log-step');
+                        }}
+                        className="px-4 py-2 bg-[#1F1F3B] text-white text-xs font-bold rounded-xl hover:bg-slate-800 transition-colors cursor-pointer"
+                      >
+                        Complete Step &rarr;
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
           )}
 
-          <section
-            id="trends"
-            className="mb-8 grid scroll-mt-24 gap-6 xl:grid-cols-[minmax(0,1.65fr)_minmax(320px,0.85fr)]"
-          >
-            <article className="min-w-0 p-5 sm:p-7 bg-white rounded-2xl border border-[#E5E3ED] shadow-xs">
-              <ChartHeading
-                eyebrow="Momentum"
-                title="Adoption and verified output over time"
-                detail="Usage trajectories compared against outcome targets."
-              />
-              <TrendChart trendData={dashboardData.trendData} />
-            </article>
+          {/* TAB 2: ASSIGNMENTS */}
+          {activeTab === 'assignments' && (
+            <div className="space-y-6 animate-in fade-in duration-200">
+              <div>
+                <h1
+                  className="text-2xl font-normal text-[#1F1F3B]"
+                  style={{ fontFamily: "'Marcellus', serif" }}
+                >
+                  Assigned Steps
+                </h1>
+                <p className="text-xs text-[#79768D] mt-0.5">
+                  View assigned tasks registered under your department workflow.
+                </p>
+              </div>
 
-            <article className="min-w-0 p-5 sm:p-7 bg-white rounded-2xl border border-[#E5E3ED] shadow-xs">
-              <ChartHeading
-                eyebrow="Workforce"
-                title="Adoption maturity"
-                detail="Share of employees by behavior stage."
-              />
-              <MaturityDonut stageData={dashboardData.stageData} />
-              <div className="grid grid-cols-2 gap-x-3 gap-y-2 border-t border-[#E5E3ED] pt-4">
-                {dashboardData.stageData.map((stage) => (
-                  <div
-                    key={stage.name}
-                    className="flex items-center justify-between gap-2 text-xs"
+              <div className="space-y-3">
+                {assignedSteps.length === 0 ? (
+                  <div className="bg-white p-8 rounded-2xl border border-[#E5E3ED] text-center text-xs text-[#79768D]">
+                    No workflow steps currently assigned to you.
+                  </div>
+                ) : (
+                  assignedSteps.map((step) => {
+                    const isDone = step.status === 'COMPLETED' || step.status === 'APPROVED';
+                    return (
+                      <div
+                        key={step.id}
+                        className="bg-white p-5 rounded-2xl border border-[#E5E3ED] flex items-center justify-between gap-4 shadow-xs"
+                      >
+                        <div className="flex items-center gap-3.5">
+                          <div
+                            className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                              isDone ? 'bg-emerald-50 text-emerald-600' : 'bg-[#EEEEF4] text-[#1F1F3B]'
+                            }`}
+                          >
+                            {isDone ? <CheckCircle2 className="w-5 h-5" /> : <Clock className="w-5 h-5" />}
+                          </div>
+                          <div>
+                            <h3 className="text-xs font-bold text-[#1F1F3B]">
+                              {step.task_name || step.workflows?.title || 'Task Step'}
+                            </h3>
+                            <p className="text-[11px] text-[#79768D] mt-0.5">
+                              Step #{step.step_order || 1} &bull; Status:{' '}
+                              <span className={`font-semibold ${isDone ? 'text-emerald-600' : 'text-amber-600'}`}>
+                                {step.status || 'PENDING'}
+                              </span>
+                            </p>
+                          </div>
+                        </div>
+                        {!isDone && (
+                          <button
+                            onClick={() => {
+                              setSelectedStepId(String(step.id));
+                              setActiveTab('log-step');
+                            }}
+                            className="px-4 py-2 bg-[#1F1F3B] text-white text-xs font-bold rounded-xl hover:bg-slate-800 transition-colors cursor-pointer"
+                          >
+                            Log Step
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* TAB 3: STEP LOGGING & HANDOFF */}
+          {activeTab === 'log-step' && (
+            <div className="space-y-6 animate-in fade-in duration-200">
+              <div>
+                <h1
+                  className="text-2xl font-normal text-[#1F1F3B]"
+                  style={{ fontFamily: "'Marcellus', serif" }}
+                >
+                  Log Completed Step
+                </h1>
+                <p className="text-xs text-[#79768D] mt-0.5">
+                  Record duration, select AI tools used, and hand off to the next peer or manager.
+                </p>
+              </div>
+
+              {errorMsg && (
+                <div className="p-3.5 bg-rose-50 border border-rose-200 text-rose-600 rounded-xl text-xs font-semibold flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{errorMsg}</span>
+                </div>
+              )}
+              {successMsg && (
+                <div className="p-3.5 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl text-xs font-semibold flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 shrink-0" />
+                  <span>{successMsg}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleSubmitStep} className="bg-white border border-[#E5E3ED] rounded-2xl p-6 space-y-5 shadow-xs">
+                {/* WORKFLOW STEP SELECTION */}
+                <div className="space-y-1.5">
+                  <label className="block text-[10px] font-bold text-[#79768D] uppercase tracking-wider">
+                    SELECT PENDING STEP *
+                  </label>
+                  <select
+                    required
+                    value={selectedStepId}
+                    onChange={(e) => setSelectedStepId(e.target.value)}
+                    className="w-full p-3 bg-[#F7F9FB] border border-[#E5E3ED] rounded-xl text-xs font-semibold text-[#1F1F3B] focus:outline-none"
                   >
-                    <span className="flex min-w-0 items-center gap-2 text-[#79768D]">
-                      <span
-                        className="h-2 w-2 shrink-0 rounded-sm"
-                        style={{
-                          backgroundColor: stage.fill || '#1F1F3B',
-                        }}
-                      />
-                      {stage.name}
-                    </span>
-                    <strong className="text-[#1F1F3B]">{stage.value}%</strong>
+                    <option value="">-- Choose Pending Step --</option>
+                    {pendingSteps.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.task_name || `Step #${s.step_order || s.id}`}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* HOURS & DATES */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="block text-[10px] font-bold text-[#79768D] uppercase tracking-wider">
+                      DURATION (HOURS) *
+                    </label>
+                    <input
+                      type="number"
+                      step="0.25"
+                      min="0.1"
+                      placeholder="e.g. 2.5"
+                      value={hours}
+                      onChange={(e) => setHours(e.target.value)}
+                      className="w-full p-3 bg-[#F7F9FB] border border-[#E5E3ED] rounded-xl text-xs text-[#1F1F3B] focus:outline-none"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="block text-[10px] font-bold text-[#79768D] uppercase tracking-wider">
+                      START DATE
+                    </label>
+                    <input
+                      type="date"
+                      value={startDate}
+                      onChange={(e) => setStartDate(e.target.value)}
+                      className="w-full p-3 bg-[#F7F9FB] border border-[#E5E3ED] rounded-xl text-xs text-[#1F1F3B] focus:outline-none"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="block text-[10px] font-bold text-[#79768D] uppercase tracking-wider">
+                      END DATE
+                    </label>
+                    <input
+                      type="date"
+                      value={endDate}
+                      onChange={(e) => setEndDate(e.target.value)}
+                      className="w-full p-3 bg-[#F7F9FB] border border-[#E5E3ED] rounded-xl text-xs text-[#1F1F3B] focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                {/* AI TOOLS SELECTION */}
+                <div className="space-y-2">
+                  <label className="block text-[10px] font-bold text-[#79768D] uppercase tracking-wider">
+                    AI TOOLS TAGGED *
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {[...AI_TOOLS, 'Other', 'No AI tools used'].map((tool) => {
+                      const isSelected = selectedTools.includes(tool);
+                      return (
+                        <button
+                          key={tool}
+                          type="button"
+                          onClick={() => toggleTool(tool)}
+                          className={`px-3 py-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
+                            isSelected
+                              ? 'bg-[#1F1F3B] text-white border-[#1F1F3B]'
+                              : 'bg-[#EEEEF4] text-[#1F1F3B] border-transparent hover:border-[#E5E3ED]'
+                          }`}
+                        >
+                          {tool}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {selectedTools.includes('Other') && (
+                    <input
+                      type="text"
+                      placeholder="Specify custom AI tool"
+                      value={otherTool}
+                      onChange={(e) => setOtherTool(e.target.value)}
+                      className="w-full mt-2 p-3 bg-[#F7F9FB] border border-[#E5E3ED] rounded-xl text-xs text-[#1F1F3B] focus:outline-none"
+                    />
+                  )}
+
+                  {selectedTools.includes('No AI tools used') && (
+                    <textarea
+                      rows={2}
+                      placeholder="Explain alternative methods or manual tools used..."
+                      value={noAiReason}
+                      onChange={(e) => setNoAiReason(e.target.value)}
+                      className="w-full mt-2 p-3 bg-[#F7F9FB] border border-[#E5E3ED] rounded-xl text-xs text-[#1F1F3B] focus:outline-none"
+                    />
+                  )}
+                </div>
+
+                {/* HANDOFF SELECTION */}
+                <div className="space-y-3 pt-2 border-t border-[#E5E3ED]">
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      id="isFinalStep"
+                      checked={isFinalStep}
+                      onChange={(e) => {
+                        setIsFinalStep(e.target.checked);
+                        setHandoffTarget('');
+                      }}
+                      className="h-4 w-4 rounded border-[#E5E3ED] text-[#1F1F3B] focus:ring-[#1F1F3B]"
+                    />
+                    <label htmlFor="isFinalStep" className="text-xs font-bold text-[#1F1F3B] cursor-pointer">
+                      Final step in workflow (Submit to Manager for Review)
+                    </label>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="block text-[10px] font-bold text-[#79768D] uppercase tracking-wider">
+                      {isFinalStep ? 'SELECT MANAGER *' : 'HAND OFF TO DEPARTMENT PEER *'}
+                    </label>
+                    <select
+                      required
+                      value={handoffTarget}
+                      onChange={(e) => setHandoffTarget(e.target.value)}
+                      className="w-full p-3 bg-[#F7F9FB] border border-[#E5E3ED] rounded-xl text-xs font-semibold text-[#1F1F3B] focus:outline-none"
+                    >
+                      <option value="">
+                        {isFinalStep ? '-- Select Manager --' : '-- Select Department Peer --'}
+                      </option>
+                      {isFinalStep
+                        ? departmentManagers.map((m) => (
+                            <option key={m.id} value={m.id}>
+                              {m.full_name} ({m.job_title || 'Manager'})
+                            </option>
+                          ))
+                        : departmentPeers.map((p) => (
+                            <option key={p.id} value={p.id}>
+                              {p.full_name} ({p.job_title || 'Candidate'})
+                            </option>
+                          ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* DELIVERABLE SUMMARY */}
+                <div className="space-y-1.5">
+                  <label className="block text-[10px] font-bold text-[#79768D] uppercase tracking-wider">
+                    DELIVERABLE SUMMARY
+                  </label>
+                  <textarea
+                    rows={3}
+                    placeholder="Provide a brief, non-confidential description of the generated output..."
+                    value={deliverableSummary}
+                    onChange={(e) => setDeliverableSummary(e.target.value)}
+                    className="w-full p-3 bg-[#F7F9FB] border border-[#E5E3ED] rounded-xl text-xs text-[#1F1F3B] focus:outline-none"
+                  />
+                </div>
+
+                {/* PRIVACY FOOTER */}
+                <div className="flex items-center gap-2 text-[11px] text-[#79768D] pt-1">
+                  <Lock className="w-3.5 h-3.5 text-[#79768D]" />
+                  <span>No proprietary data or code is stored or exposed.</span>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="w-full py-3.5 bg-[#1F1F3B] hover:bg-slate-800 text-white text-xs font-bold rounded-xl transition-all shadow-xs cursor-pointer disabled:opacity-50"
+                >
+                  {isSubmitting
+                    ? 'Submitting...'
+                    : isFinalStep
+                    ? 'Complete Step & Send for Manager Review'
+                    : 'Complete Step & Handoff to Peer'}
+                </button>
+              </form>
+            </div>
+          )}
+
+          {/* TAB 4: HELP */}
+          {activeTab === 'help' && (
+            <div className="space-y-6 animate-in fade-in duration-200">
+              <div>
+                <h1
+                  className="text-2xl font-normal text-[#1F1F3B]"
+                  style={{ fontFamily: "'Marcellus', serif" }}
+                >
+                  Guidelines & FAQ
+                </h1>
+                <p className="text-xs text-[#79768D] mt-0.5">
+                  Frequently asked questions on dynamic handoffs and executive tracking.
+                </p>
+              </div>
+              <div className="space-y-3">
+                {[
+                  [
+                    'How are workflow steps passed between department colleagues?',
+                    'When you select a department peer and submit, a new pending step is automatically routed to their dashboard under the same workflow process map.'
+                  ],
+                  [
+                    'How do manager evaluations work?',
+                    'When the final candidate marks "Final step in workflow", the process map completes and is forwarded to the manager dashboard for proficiency rating (1-5).'
+                  ],
+                  [
+                    'How does this feed into executive reporting?',
+                    'All completed step durations, tool tags, and manager ratings are aggregated across departments to generate the process maps and time-savings metrics on the executive page.'
+                  ]
+                ].map(([q, a]) => (
+                  <div key={q} className="bg-white p-5 rounded-2xl border border-[#E5E3ED] space-y-1 shadow-xs">
+                    <h3 className="text-xs font-bold text-[#1F1F3B]">{q}</h3>
+                    <p className="text-xs text-[#79768D] leading-relaxed">{a}</p>
                   </div>
                 ))}
               </div>
-            </article>
-          </section>
-
-          <section className="mb-8 grid gap-6 xl:grid-cols-2">
-            <article className="min-w-0 p-5 sm:p-7 bg-white rounded-2xl border border-[#E5E3ED] shadow-xs">
-              <ChartHeading
-                eyebrow="Portfolio"
-                title="Department adoption index"
-                detail="A concise view of adoption by department."
-              />
-              {dashboardData.departments.length === 0 ? (
-                <p className="text-xs text-[#79768D] py-6 text-center">
-                  No departments found.
-                </p>
-              ) : (
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {dashboardData.departments.map((department) => {
-                    const indexVal =
-                      department.index || department.adoption_index || 0;
-                    const tone = performanceTone(indexVal);
-                    return (
-                      <div
-                        key={department.name || department.id}
-                        className={`rounded-lg border-l-4 p-4 ${tone.surface} ${tone.border} flex flex-col justify-between`}
-                      >
-                        <div className="flex items-start justify-between gap-3 text-[#1F1F3B]">
-                          <span className="text-sm font-semibold">
-                            {department.name}
-                          </span>
-                          <strong
-                            className="text-2xl font-normal text-[#1F1F3B]"
-                            style={{ fontFamily: "'Marcellus', serif" }}
-                          >
-                            {indexVal}
-                          </strong>
-                        </div>
-                        <button
-                          onClick={() => router.push('?tab=departments')}
-                          className="mt-4 flex w-full items-center justify-between border-t border-[#E5E3ED] pt-3 text-xs font-semibold text-[#1F1F3B] cursor-pointer hover:text-[#4C4B64] transition-colors"
-                        >
-                          Learn more <ChevronRight className="h-4 w-4" />
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </article>
-
-            <article className="min-w-0 p-5 sm:p-7 bg-white rounded-2xl border border-[#E5E3ED] shadow-xs">
-              <ChartHeading
-                eyebrow="Readiness"
-                title="Enterprise capability profile"
-                detail="Capabilities evaluated against target benchmark criteria."
-              />
-              <CapabilityRadar
-                capabilityData={dashboardData.capabilityData}
-              />
-            </article>
-          </section>
-
-          <section
-            id="attention"
-            className="mb-8 grid scroll-mt-24 gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(310px,0.65fr)]"
-          >
-            <article className="p-5 sm:p-7 bg-white rounded-2xl border border-[#E5E3ED] shadow-xs">
-              <ChartHeading
-                eyebrow="Leadership attention"
-                title="Key strategic priorities"
-                detail="Action items prioritized from workflow and evidence evaluations."
-              />
-              {dashboardData.attentionItems.length === 0 ? (
-                <p className="text-xs text-[#79768D] py-6 text-center">
-                  No pending action items.
-                </p>
-              ) : (
-                <div className="divide-y divide-[#E5E3ED]">
-                  {dashboardData.attentionItems.map((item) => (
-                    <div
-                      key={item.title || item.id}
-                      className="grid gap-3 py-4 first:pt-0 last:pb-0 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center"
-                    >
-                      <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0" />
-                      <div>
-                        <p className="text-sm font-semibold text-[#1F1F3B]">
-                          {item.title}
-                        </p>
-                        <p className="mt-1 text-xs text-[#79768D]">
-                          {item.detail}
-                        </p>
-                      </div>
-                      {item.action && (
-                        <span className="flex items-center gap-1 text-xs font-semibold text-[#1F1F3B] cursor-pointer hover:underline">
-                          {item.action}
-                          <ArrowUpRight className="h-3.5 w-3.5" />
-                        </span>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </article>
-
-            <article className="min-w-0 p-5 sm:p-7 bg-white rounded-2xl border border-[#E5E3ED] shadow-xs">
-              <ChartHeading
-                eyebrow="Discovery insights"
-                title="Primary use cases"
-                detail="Key operational categories identified from discovery responses."
-              />
-              <DiscoveryUseCases
-                discoveryUseCases={dashboardData.discoveryUseCases}
-              />
-            </article>
-          </section>
-        </>
-      )}
-
-      {view === 'departments' && (
-        <section id="departments" className="mb-10 scroll-mt-24">
-          <div className="mb-7 border-b border-[#E5E3ED] pb-5">
-            <div className="flex flex-wrap items-end justify-between gap-4">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-[#1F1F3B]">
-                  Evidence explorer
-                </p>
-                <h2
-                  className="mt-1 text-3xl font-normal text-[#1F1F3B]"
-                  style={{ fontFamily: "'Marcellus', serif" }}
-                >
-                  Department breakdowns
-                </h2>
-                <p className="mt-2 text-sm text-[#79768D]">
-                  Operational results and process detail by operational area.
-                </p>
-              </div>
-              <button
-                onClick={() => router.push('?tab=overview')}
-                className="flex items-center gap-1 text-sm font-semibold text-[#1F1F3B] cursor-pointer hover:underline"
-              >
-                Back to overview
-                <ChevronRight className="h-4 w-4 rotate-180" />
-              </button>
-            </div>
-          </div>
-
-          {dashboardData.departments.length === 0 ? (
-            <div className="p-12 text-center text-sm text-[#79768D] bg-white rounded-2xl border border-[#E5E3ED]">
-              No department records available.
-            </div>
-          ) : (
-            <div className="space-y-6">
-              {dashboardData.departments.map((department) => {
-                const indexVal =
-                  department.index || department.adoption_index || 0;
-                const tone = performanceTone(indexVal);
-
-                return (
-                  <article
-                    key={department.name || department.id}
-                    className="scroll-mt-24 overflow-hidden bg-white rounded-2xl border border-[#E5E3ED] shadow-xs"
-                  >
-                    <div
-                      className={`grid gap-5 border-b border-[#E5E3ED] p-5 sm:p-6 lg:grid-cols-[minmax(0,1fr)_repeat(2,minmax(110px,auto))] lg:items-center ${tone.surface}`}
-                    >
-                      <div>
-                        <div className="flex flex-wrap items-center gap-3">
-                          <h3
-                            className="text-2xl font-normal text-[#1F1F3B]"
-                            style={{ fontFamily: "'Marcellus', serif" }}
-                          >
-                            {department.name}
-                          </h3>
-                          <span
-                            className={`rounded-md px-2.5 py-1 text-xs font-semibold ${tone.badge}`}
-                          >
-                            {indexVal} adoption index
-                          </span>
-                        </div>
-                      </div>
-                      <dl className="contents">
-                        <div>
-                          <dt className="text-xs text-[#79768D]">
-                            Quality Score
-                          </dt>
-                          <dd className="mt-1 text-xl font-bold text-[#1F1F3B]">
-                            {department.quality ||
-                              department.quality_score ||
-                              'N/A'}
-                            /5
-                          </dd>
-                        </div>
-                        <div>
-                          <dt className="text-xs text-[#79768D]">
-                            Turnaround Time
-                          </dt>
-                          <dd className="mt-1 text-xl font-bold text-[#1F1F3B]">
-                            {department.turnaroundAfter ||
-                            department.turnaround_days
-                              ? `${department.turnaroundAfter || department.turnaround_days}d`
-                              : 'N/A'}
-                          </dd>
-                        </div>
-                      </dl>
-                    </div>
-                    <DepartmentProcessMap
-                      deptName={department.name}
-                      deptId={department.id}
-                    />
-                  </article>
-                );
-              })}
             </div>
           )}
-        </section>
-      )}
-    </PortalShell>
+        </main>
+      </div>
+    </div>
   );
 }
