@@ -3,14 +3,17 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { createClient } from '@/lib/supabase/client';
+import { createClient } from '../../lib/supabase/client';
 import { Eye, EyeOff, X, CheckCircle2 } from 'lucide-react';
 
 export default function ResetPasswordPage() {
   const router = useRouter();
   const supabase = createClient();
+
   const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
@@ -25,7 +28,7 @@ export default function ResetPasswordPage() {
     return () => {
       authListener?.subscription?.unsubscribe();
     };
-  }, []);
+  }, [supabase]);
 
   const handleUpdatePassword = async (e) => {
     e.preventDefault();
@@ -33,17 +36,45 @@ export default function ResetPasswordPage() {
     setErrorMsg('');
     setSuccessMsg('');
 
+    if (newPassword !== confirmPassword) {
+      setErrorMsg('Passwords do not match.');
+      setLoading(false);
+      return;
+    }
+
+    if (newPassword.length < 8) {
+      setErrorMsg('Password must be at least 8 characters long.');
+      setLoading(false);
+      return;
+    }
+
     try {
-      const { error } = await supabase.auth.updateUser({
+      // 1. Update user password in Supabase Auth
+      const { data, error } = await supabase.auth.updateUser({
         password: newPassword,
       });
 
       if (error) throw error;
 
-      setSuccessMsg('Your password has been updated successfully! Redirecting to login...');
+      setSuccessMsg('Your password has been updated successfully! Redirecting...');
+
+      // 2. Fetch role to determine where to redirect user
+      let targetLogin = '/candidate-login';
+      if (data?.user?.id) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', data.user.id)
+          .maybeSingle();
+
+        const role = (profile?.role || '').trim().toUpperCase();
+        if (role === 'ADMIN' || role === 'EXECUTIVE') {
+          targetLogin = '/admin-login';
+        }
+      }
 
       setTimeout(() => {
-        router.push('/admin-login');
+        router.push(targetLogin);
       }, 2000);
     } catch (err) {
       setErrorMsg(err.message || 'Failed to update password. Link may be expired.');
@@ -71,7 +102,7 @@ export default function ResetPasswordPage() {
             Create New Password
           </h1>
           <p className="text-xs text-slate-500">
-            Enter your new password below to update your admin credentials.
+            Enter your new password below to update your account credentials.
           </p>
         </div>
 
@@ -109,6 +140,29 @@ export default function ResetPasswordPage() {
                 className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
               >
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+              CONFIRM NEW PASSWORD
+            </label>
+            <div className="relative">
+              <input
+                required
+                type={showConfirmPassword ? 'text' : 'password'}
+                placeholder="••••••••••••"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                className="w-full pl-4 pr-10 py-3 bg-[#F8FAFC] border border-slate-200/80 rounded-xl text-xs text-slate-900 focus:bg-white focus:outline-none focus:ring-1 focus:ring-slate-400 transition-all"
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
           </div>

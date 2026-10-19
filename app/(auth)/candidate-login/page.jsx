@@ -1,5 +1,4 @@
 'use client';
-
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
@@ -28,6 +27,26 @@ export default function CandidateLoginPage() {
     password: '',
     confirmPassword: '',
   });
+
+  // Role-Based Routing Handler (Manager -> /manager, Candidate -> /candidate)
+  const routeUserByRole = (role) => {
+    const cleanRole = (role || '').trim().toUpperCase();
+
+    if (cleanRole === 'MANAGER') {
+      router.push('/manager');
+      return true;
+    } else if (cleanRole === 'CANDIDATE' || cleanRole === 'EMPLOYEE') {
+      router.push('/candidate');
+      return true;
+    } else if (cleanRole === 'ADMIN' || cleanRole === 'EXECUTIVE') {
+      setErrorMsg('Admins and Executives must log in using the Admin Portal.');
+      supabase.auth.signOut();
+      return false;
+    } else {
+      router.push('/candidate');
+      return true;
+    }
+  };
 
   // Password Requirement Checks
   const hasMinLength = formData.password.length >= 8;
@@ -66,8 +85,9 @@ export default function CandidateLoginPage() {
           .eq('id', session.user.id)
           .maybeSingle();
 
-        const role = profile?.role?.toLowerCase() || 'employee';
-        router.push(`/${role}`);
+        if (profile?.role) {
+          routeUserByRole(profile.role);
+        }
       }
     };
     checkSession();
@@ -119,7 +139,7 @@ export default function CandidateLoginPage() {
           throw new Error('Please fulfill all password requirements before continuing.');
         }
 
-        // 1. Verify if email exists in Supabase profiles table (Pre-approved by Admin)
+        // 1. Verify pre-approval in profiles table
         const { data: existingProfile, error: profileCheckError } = await supabase
           .from('profiles')
           .select('*')
@@ -132,30 +152,39 @@ export default function CandidateLoginPage() {
           throw new Error('Sign up failed: Your email was not pre-approved by an administrator.');
         }
 
-        // 2. Perform Supabase Sign Up
+        const userRole = (existingProfile.role || '').toUpperCase();
+        if (userRole === 'ADMIN' || userRole === 'EXECUTIVE') {
+          throw new Error('Administrators and Executives must log in through the Admin Portal.');
+        }
+
+        // 2. Perform Sign Up with full name metadata
         const { data: authData, error: signUpError } = await supabase.auth.signUp({
           email: cleanEmail,
           password: formData.password,
           options: {
-            data: { full_name: formData.fullName || existingProfile.full_name },
+            data: { 
+              full_name: formData.fullName || existingProfile.full_name,
+              role: existingProfile.role,
+            },
           },
         });
 
         if (signUpError) throw signUpError;
 
-        // 3. Link profile with newly generated Auth ID
+        // Check if user already exists in auth.users
+        if (authData?.user && authData.user.identities && authData.user.identities.length === 0) {
+          throw new Error('An account with this email already exists. Please log in directly or use "Forgot password?".');
+        }
+
+        // 3. Link Profile record cleanly
         if (authData?.user) {
-          const { error: updateError } = await supabase
+          await supabase
             .from('profiles')
-            .update({ 
+            .update({
               id: authData.user.id,
-              full_name: formData.fullName || existingProfile.full_name 
+              full_name: formData.fullName || existingProfile.full_name,
             })
             .ilike('email', cleanEmail);
-
-          if (updateError) {
-            console.warn('Profile sync warning:', updateError.message);
-          }
 
           setShowConfirmationModal(true);
         }
@@ -166,17 +195,23 @@ export default function CandidateLoginPage() {
           password: formData.password,
         });
 
-        if (error) throw error;
+        if (error) {
+          if (error.message.includes('Invalid login credentials')) {
+            throw new Error('Invalid email or password. If you just signed up, please check your email inbox to verify your account first.');
+          }
+          throw error;
+        }
 
         if (data?.user) {
+          // Fetch role from profile
           const { data: profile } = await supabase
             .from('profiles')
             .select('role')
-            .eq('id', data.user.id)
+            .or(`id.eq.${data.user.id},email.ilike.${cleanEmail}`)
             .maybeSingle();
 
-          const role = profile?.role?.toLowerCase() || 'employee';
-          router.push(`/${role}`);
+          const role = profile?.role || 'CANDIDATE';
+          routeUserByRole(role);
         }
       }
     } catch (err) {
@@ -210,7 +245,7 @@ export default function CandidateLoginPage() {
             <div className="space-y-2">
               <h3 className="text-xl font-bold text-slate-900">Sign Up Complete</h3>
               <p className="text-xs text-slate-500 leading-relaxed">
-                Your account for <span className="font-semibold text-slate-800">{formData.email}</span> has been successfully created. You can now log in with your credentials.
+                Your account for <span className="font-semibold text-slate-800">{formData.email}</span> has been successfully created. If required by your system, please check your email to verify your address before logging in.
               </p>
             </div>
             <button
@@ -263,10 +298,10 @@ export default function CandidateLoginPage() {
               />
             </div>
             <p className="text-[10px] font-bold tracking-[0.25em] text-slate-400 uppercase">
-              PERSONAL DEVELOPMENT PORTAL
+              PORTAL ACCESS
             </p>
             <h2 className="text-lg font-bold text-[#0F172A] tracking-tight leading-snug px-2">
-              Start your growth journey with clear, actionable insights
+              Candidate & Manager Portal
             </h2>
           </div>
 
@@ -341,7 +376,7 @@ export default function CandidateLoginPage() {
               <input
                 required
                 type="email"
-                placeholder="candidate@gmail.com"
+                placeholder="user@organization.com"
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 className="w-full px-4 py-3 bg-[#F8FAFC] border border-slate-200/80 rounded-xl text-xs text-slate-900 focus:bg-white focus:outline-none focus:ring-1 focus:ring-slate-400 transition-all"

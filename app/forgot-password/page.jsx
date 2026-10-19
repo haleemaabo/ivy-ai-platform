@@ -2,10 +2,12 @@
 
 import React, { useState } from 'react';
 import Image from 'next/image';
-import { supabase } from '@/app/lib/supabase';
+import { createClient } from '../../lib/supabase/client';
 import { X, CheckCircle2 } from 'lucide-react';
 
 export default function ForgotPasswordPage() {
+  const supabase = createClient();
+
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -19,8 +21,8 @@ export default function ForgotPasswordPage() {
 
     try {
       // 1. Sends the reset email and tells Supabase where to redirect the user
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: 'http://localhost:3000/reset-password',
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
+        redirectTo: `${window.location.origin}/reset-password`,
       });
 
       if (error) throw error;
@@ -76,7 +78,7 @@ export default function ForgotPasswordPage() {
             <input
               required
               type="email"
-              placeholder="admin@ivy-company.com"
+              placeholder="user@organization.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="w-full px-4 py-3 bg-[#F8FAFC] border border-slate-200/80 rounded-xl text-xs text-slate-900 focus:bg-white focus:outline-none focus:ring-1 focus:ring-slate-400 transition-all"

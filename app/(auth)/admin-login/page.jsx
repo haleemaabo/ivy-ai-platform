@@ -23,22 +23,25 @@ export default function AdminLoginPage() {
   const routeUserByRole = async (userEmail) => {
     const cleanEmail = userEmail.trim().toLowerCase();
 
-    // Query 'profiles' table for user role & organization
-    const { data: userData } = await supabase
+    // Query 'profiles' table using standardized 'organization' column
+    const { data: userData, error: profileErr } = await supabase
       .from('profiles')
-      .select('role, organization_id')
-      .ilike('email', cleanEmail)
+      .select('role, organization')
+      .eq('email', cleanEmail)
       .maybeSingle();
+
+    if (profileErr) throw profileErr;
 
     const normalizedRole = (userData?.role || '').toUpperCase().replace(/\s+/g, '');
 
     sessionStorage.setItem('portalMode', 'admin');
     sessionStorage.setItem('userRole', normalizedRole);
 
-    if (userData?.organization_id) {
-      sessionStorage.setItem('organizationId', userData.organization_id);
+    if (userData?.organization) {
+      sessionStorage.setItem('organization', userData.organization);
     }
 
+    // Strict routing logic for Executive and Admin roles
     if (normalizedRole === 'EXECUTIVE') {
       router.push('/executive');
     } else if (normalizedRole === 'ADMIN') {
@@ -46,9 +49,10 @@ export default function AdminLoginPage() {
     } else if (normalizedRole === 'MANAGER') {
       router.push('/manager');
     } else {
+      // Reject non-privileged users (e.g. CANDIDATE) and terminate session
       await supabase.auth.signOut();
       sessionStorage.clear();
-      throw new Error('Access denied. Privileged privileges required.');
+      throw new Error('Access denied. Administrator or Executive privileges required.');
     }
   };
 
@@ -60,7 +64,7 @@ export default function AdminLoginPage() {
         try {
           await routeUserByRole(session.user.email);
         } catch {
-          // Stay on page if unapproved
+          // Stay on login screen if user is unauthorized
         }
       }
     };
@@ -84,15 +88,13 @@ export default function AdminLoginPage() {
         password: formData.password,
       });
 
-      if (!error && data?.user) {
+      if (error) throw error;
+
+      if (data?.user) {
         await routeUserByRole(cleanEmail);
-        return;
       }
-
-      throw error || new Error('Invalid login credentials');
-
     } catch (err) {
-      setErrorMsg(err.message || 'Authentication failed');
+      setErrorMsg(err.message || 'Authentication failed. Please check your credentials.');
     } finally {
       setLoading(false);
     }
@@ -134,43 +136,43 @@ export default function AdminLoginPage() {
             fill
             className="object-cover"
             priority
-            />
+          />
         </div>
         
         <div className="absolute inset-0 z-1 pointer-events-none bg-gradient-to-r from-[#17467B]/95 via-[#184D87]/70 to-[#1C5493]/20" />
         
         <div className="relative z-10 max-w-xl space-y-6 pl-2">
-            <h1 className="text-3xl xl:text-[40px] font-bold tracking-tight leading-[1.2]">
+          <h1 className="text-3xl xl:text-[40px] font-bold tracking-tight leading-[1.2]">
             Insights that shape leaders.{' '}
             <span className="font-normal">Decisions that shape organizations.</span>
-            </h1>
-            <div className="w-10 h-[3px] bg-slate-300/60 rounded-full" />
+          </h1>
+          <div className="w-10 h-[3px] bg-slate-300/60 rounded-full" />
         </div>
-        </div>
+      </div>
 
-        {/* RIGHT SECTION: Form & Logo */}
-        <div className="flex-1 flex flex-col justify-center items-center px-8 py-6 relative bg-white h-full overflow-y-auto lg:overflow-hidden">
+      {/* RIGHT SECTION: Form & Brand Logo */}
+      <div className="flex-1 flex flex-col justify-center items-center px-8 py-6 relative bg-white h-full overflow-y-auto lg:overflow-hidden">
         <div className="w-full max-w-[400px] space-y-8">
-            
-            {/* Company Brand Logo */}
-            <div className="text-center space-y-3">
+          
+          {/* Company Brand Logo */}
+          <div className="text-center space-y-3">
             <div className="flex justify-center mb-1">
-                <Image
+              <Image
                 src="/ivy-logo-dark.png"
                 alt="IVY & COMPANY"
                 width={160}
                 height={45}
                 className="object-contain"
                 priority
-                />
+              />
             </div>
             <p className="text-[10px] font-bold tracking-[0.25em] text-slate-400 uppercase">
-                PORTAL LOGIN
+              ADMINISTRATIVE PORTAL
             </p>
             <h2 className="text-xl font-bold text-[#0F172A] tracking-tight leading-snug px-2">
-                Manage talent, assignments, and insights
+              Manage talent, assignments, and organizational insights
             </h2>
-        </div>
+          </div>
 
           {errorMsg && (
             <div className="p-3 bg-red-50 border border-red-200/80 text-red-600 rounded-xl text-xs font-semibold flex items-center gap-2">
@@ -237,9 +239,9 @@ export default function AdminLoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3.5 bg-[#17467B] hover:bg-[#123864] text-white font-bold text-xs rounded-xl transition-all duration-200 cursor-pointer mt-2 shadow-xs"
+              className="w-full py-3.5 bg-[#17467B] hover:bg-[#123864] text-white font-bold text-xs rounded-xl transition-all duration-200 cursor-pointer mt-2 shadow-xs disabled:opacity-50"
             >
-              {loading ? 'Authenticating...' : 'Log In'}
+              {loading ? 'Authenticating...' : 'Log In to Admin Portal'}
             </button>
           </form>
         </div>
