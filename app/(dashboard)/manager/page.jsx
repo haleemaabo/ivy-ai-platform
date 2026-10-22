@@ -74,13 +74,23 @@ export function FrictionSuitabilityMatrix({ workflows = [], onSelectWorkflow }) 
   const [selectedQuadrant, setSelectedQuadrant] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
 
-  const categorizeWorkflow = (wf) => {
-    const friction = wf.frictionScore ?? wf.friction_score ?? 5;
-    const suitability = wf.aiSuitabilityScore ?? wf.ai_suitability_score ?? 5;
+  // Scores are 1-10, entered by the admin when the workflow is created.
+  // 6 or higher counts as "high".
+  const HIGH = 6;
 
-    if (friction >= 5 && suitability >= 5) return 'TRANSFORM';
-    if (friction < 5 && suitability >= 5) return 'QUICK_WINS';
-    if (friction >= 5 && suitability < 5) return 'REDESIGN_ONLY';
+  const getScores = (wf) => {
+    const f = wf.frictionScore ?? wf.friction_score;
+    const s = wf.aiSuitabilityScore ?? wf.ai_suitability_score;
+    if (f === null || f === undefined || s === null || s === undefined) return null;
+    return { friction: Number(f), suitability: Number(s) };
+  };
+
+  const categorizeWorkflow = (wf) => {
+    const sc = getScores(wf);
+    if (!sc) return null; // not scored yet -> not placed in a quadrant
+    if (sc.friction >= HIGH && sc.suitability >= HIGH) return 'TRANSFORM';
+    if (sc.friction < HIGH && sc.suitability >= HIGH) return 'QUICK_WINS';
+    if (sc.friction >= HIGH && sc.suitability < HIGH) return 'REDESIGN_ONLY';
     return 'MAINTAIN';
   };
 
@@ -97,10 +107,12 @@ export function FrictionSuitabilityMatrix({ workflows = [], onSelectWorkflow }) 
     REDESIGN_ONLY: [],
     MAINTAIN: [],
   };
+  const unscored = [];
 
   filteredWorkflows.forEach((wf) => {
     const quadKey = categorizeWorkflow(wf);
-    groupedWorkflows[quadKey].push(wf);
+    if (quadKey) groupedWorkflows[quadKey].push(wf);
+    else unscored.push(wf);
   });
 
   const quadrantsToDisplay =
@@ -143,9 +155,9 @@ export function FrictionSuitabilityMatrix({ workflows = [], onSelectWorkflow }) 
         </div>
       </div>
 
-      {/* MATRIX LAYOUT WITH FIX FOR OVERLAPPING Y-AXIS LABEL */}
+      {/* MATRIX LAYOUT */}
       <div className="flex gap-4 items-center">
-        {/* Y-AXIS LABEL (POSITIONED OUTSIDE GRID TO PREVENT OVERLAP) */}
+        {/* Y-AXIS LABEL */}
         <div className="shrink-0 flex items-center justify-center">
           <span className="-rotate-90 whitespace-nowrap text-[11px] font-bold text-slate-500 uppercase tracking-widest">
             AI Suitability &rarr;
@@ -159,9 +171,7 @@ export function FrictionSuitabilityMatrix({ workflows = [], onSelectWorkflow }) 
 
           <div
             className={`grid gap-4 ${
-              selectedQuadrant === 'ALL'
-                ? 'grid-cols-1 md:grid-cols-2'
-                : 'grid-cols-1'
+              selectedQuadrant === 'ALL' ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1'
             }`}
           >
             {quadrantsToDisplay.map((quadKey) => {
@@ -178,9 +188,7 @@ export function FrictionSuitabilityMatrix({ workflows = [], onSelectWorkflow }) 
                     <span>
                       {quad.title} ({items.length})
                     </span>
-                    <span className="text-[10px] opacity-80">
-                      {quad.subtitle}
-                    </span>
+                    <span className="text-[10px] opacity-80">{quad.subtitle}</span>
                   </div>
                   <div className="p-3 flex-1 space-y-2">
                     {items.length === 0 ? (
@@ -191,9 +199,7 @@ export function FrictionSuitabilityMatrix({ workflows = [], onSelectWorkflow }) 
                       items.map((wf) => (
                         <div
                           key={wf.id}
-                          onClick={() =>
-                            onSelectWorkflow && onSelectWorkflow(wf)
-                          }
+                          onClick={() => onSelectWorkflow && onSelectWorkflow(wf)}
                           className="bg-white p-3 rounded-lg shadow-xs border border-slate-200 cursor-pointer hover:border-[#1F1F3B] hover:shadow transition-all"
                         >
                           <div className="flex justify-between items-start">
@@ -210,21 +216,16 @@ export function FrictionSuitabilityMatrix({ workflows = [], onSelectWorkflow }) 
                             <span>
                               Friction:{' '}
                               <strong className="text-slate-700">
-                                {wf.frictionScore ?? wf.friction_score ?? 5}/10
+                                {Number(wf.friction_score ?? wf.frictionScore)}/10
                               </strong>
                             </span>
                             <span>
                               AI Suitability:{' '}
                               <strong className="text-slate-700">
-                                {wf.aiSuitabilityScore ??
-                                  wf.ai_suitability_score ??
-                                  5}
-                                /10
+                                {Number(wf.ai_suitability_score ?? wf.aiSuitabilityScore)}/10
                               </strong>
                             </span>
-                            <span>
-                              {wf.durationHours || wf.duration_hours || 0}h baseline
-                            </span>
+                            <span>{wf.baseline_effort_hours ?? 0}h baseline</span>
                           </div>
                         </div>
                       ))
@@ -236,6 +237,16 @@ export function FrictionSuitabilityMatrix({ workflows = [], onSelectWorkflow }) 
           </div>
         </div>
       </div>
+
+      {unscored.length > 0 && (
+        <div className="mt-6 p-4 rounded-xl border border-dashed border-slate-300 bg-slate-50 text-xs text-slate-500">
+          <p className="font-bold text-slate-700 mb-1">Not yet scored ({unscored.length})</p>
+          <p>
+            {unscored.map((wf) => wf.title || wf.name).join(', ')}. Ask your admin to add friction and
+            AI suitability scores.
+          </p>
+        </div>
+      )}
     </div>
   );
 }
@@ -263,26 +274,20 @@ export function ProcessMap({ steps = [], initialMode = 'T0' }) {
   const [viewMode, setViewMode] = useState(initialMode);
 
   const t0TotalHours = steps.reduce(
-    (acc, step) =>
-      acc + Number(step.durationHours || step.duration_hours || 2),
+    (acc, step) => acc + Number(step.durationHours || step.duration_hours || 2),
     0
   );
 
   const t2TotalHours = steps.reduce((acc, step) => {
     if (step.lever === 'ELIMINATE') return acc;
-    return (
-      acc +
-      Number(step.durationHoursAfter ?? step.duration_hours_after ?? 0.5)
-    );
+    return acc + Number(step.durationHoursAfter ?? step.duration_hours_after ?? 0.5);
   }, 0);
 
   return (
     <div className="bg-white rounded-xl shadow-md p-6 border border-slate-200 font-sans">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center pb-4 border-b border-slate-200 mb-6 gap-4">
         <div>
-          <h2 className="text-lg font-bold text-slate-900">
-            Workflow Process Map
-          </h2>
+          <h2 className="text-lg font-bold text-slate-900">Workflow Process Map</h2>
           <p className="text-xs text-slate-500">
             Compare step-by-step process flow between baseline and redesigned state.
           </p>
@@ -324,9 +329,7 @@ export function ProcessMap({ steps = [], initialMode = 'T0' }) {
               : step.lever === 'AUGMENT'
               ? 'AGENT_DRAFTS_HUMAN_OWNS'
               : 'HUMAN_UNCHANGED');
-          const badge =
-            RESPONSIBILITY_BADGES[modelKey] ||
-            RESPONSIBILITY_BADGES.HUMAN_UNCHANGED;
+          const badge = RESPONSIBILITY_BADGES[modelKey] || RESPONSIBILITY_BADGES.HUMAN_UNCHANGED;
 
           return (
             <div
@@ -359,9 +362,7 @@ export function ProcessMap({ steps = [], initialMode = 'T0' }) {
                 </div>
                 <div className="flex items-center gap-3 self-end sm:self-center shrink-0">
                   {viewMode === 'T2' && !isEliminated && (
-                    <span
-                      className={`text-[10px] font-bold px-2 py-0.5 rounded border ${badge.color}`}
-                    >
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${badge.color}`}>
                       {badge.label}
                     </span>
                   )}
@@ -377,11 +378,7 @@ export function ProcessMap({ steps = [], initialMode = 'T0' }) {
                       <span>
                         {isEliminated
                           ? '0 hrs'
-                          : `${
-                              step.durationHoursAfter ??
-                              step.duration_hours_after ??
-                              0.5
-                            } hrs`}
+                          : `${step.durationHoursAfter ?? step.duration_hours_after ?? 0.5} hrs`}
                       </span>
                     )}
                   </div>
@@ -396,7 +393,45 @@ export function ProcessMap({ steps = [], initialMode = 'T0' }) {
 }
 
 // ==========================================
-// 3. MAIN MANAGER DASHBOARD
+// 3. METRIC HELPERS
+// ==========================================
+
+const STEP_DONE = ['APPROVED', 'COMPLETED', 'SUBMITTED TO MANAGER'];
+
+const toMs = (v) => {
+  if (!v) return null;
+  const t = new Date(v).getTime();
+  return Number.isNaN(t) ? null : t;
+};
+
+const average = (vals) => {
+  const v = vals.filter((x) => x !== null && x !== undefined && !Number.isNaN(x));
+  return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null;
+};
+
+// Elapsed calendar days: first assignment -> last completion
+function computeTurnaroundDays(wfSteps) {
+  const starts = wfSteps
+    .map((s) => toMs(s.start_time || s.assigned_date || s.created_at))
+    .filter((v) => v !== null);
+  const ends = wfSteps
+    .map((s) => toMs(s.end_time || s.completed_date))
+    .filter((v) => v !== null);
+  if (!starts.length || !ends.length) return null;
+  const days = (Math.max(...ends) - Math.min(...starts)) / 86400000;
+  return days >= 0 ? days : null;
+}
+
+// % of time saved vs the baseline effort the admin entered for the workflow
+function computeWorkflowEfficiency(wf, wfSteps) {
+  const baseline = Number(wf.baseline_effort_hours) || 0;
+  const actual = wfSteps.reduce((a, s) => a + (Number(s.duration_hours) || 0), 0);
+  if (baseline <= 0 || actual <= 0) return null;
+  return ((baseline - actual) / baseline) * 100;
+}
+
+// ==========================================
+// 4. MAIN MANAGER DASHBOARD
 // ==========================================
 
 export default function ManagerDashboard() {
@@ -475,16 +510,12 @@ export default function ManagerDashboard() {
       setAllProfiles(profilesList || []);
 
       // Fetch Workflows
-      const { data: wfData, error: wfErr } = await supabase
-        .from('workflows')
-        .select('*');
+      const { data: wfData, error: wfErr } = await supabase.from('workflows').select('*');
 
       if (wfErr) console.warn('Workflows fetch warning:', wfErr.message);
 
       const allWfs = wfData || [];
-      const managerEmail = (currentProf.email || session.user.email || '')
-        .toLowerCase()
-        .trim();
+      const managerEmail = (currentProf.email || session.user.email || '').toLowerCase().trim();
       const managerDept = (currentProf.department || '').toLowerCase().trim();
 
       const assignedWorkflows = allWfs.filter((wf) => {
@@ -579,18 +610,29 @@ export default function ManagerDashboard() {
       })
       .sort((a, b) => (a.step_order || 0) - (b.step_order || 0));
 
+    // Completed = the manager has locked the quality score
+    const isCompleted = wf.is_approved === true;
+
+    // Bottleneck is only computed once the workflow is completed
     let bottleneckStep = null;
-    let maxDuration = -1;
+    if (isCompleted) {
+      let maxDuration = -1;
+      cleanSteps.forEach((st) => {
+        const dur = Number(st.duration_hours || 0);
+        if (dur > maxDuration) {
+          maxDuration = dur;
+          bottleneckStep = st;
+        }
+      });
+    }
 
-    cleanSteps.forEach((st) => {
-      const dur = Number(st.duration_hours || 0);
-      if (dur > maxDuration) {
-        maxDuration = dur;
-        bottleneckStep = st;
-      }
-    });
+    // Until then: the first step that hasn't been completed / handed off
+    const currentStep = isCompleted
+      ? null
+      : cleanSteps.find((s) => !STEP_DONE.includes(s.status)) || null;
+    const awaitingReview = !isCompleted && cleanSteps.length > 0 && !currentStep;
 
-    return { ...wf, steps: cleanSteps, bottleneckStep };
+    return { ...wf, steps: cleanSteps, bottleneckStep, currentStep, awaitingReview, isCompleted };
   }, [selectedWorkflowId, workflows, allSteps]);
 
   // Active Workflows Calculation
@@ -598,9 +640,7 @@ export default function ManagerDashboard() {
     return workflows.filter((wf) => {
       const steps = allSteps.filter((s) => String(s.workflow_id) === String(wf.id));
       if (steps.length === 0) return !wf.is_approved;
-      const allApproved = steps.every(
-        (s) => s.status === 'APPROVED' || s.status === 'COMPLETED'
-      );
+      const allApproved = steps.every((s) => s.status === 'APPROVED' || s.status === 'COMPLETED');
       return !wf.is_approved && !allApproved;
     });
   }, [workflows, allSteps]);
@@ -617,86 +657,107 @@ export default function ManagerDashboard() {
     });
   }, [workflows, allSteps]);
 
-  // Bottleneck Position Indicator Percentage (0% to 100%)
+  // Bottleneck marker position (null when there is no bottleneck yet)
   const bottleneckPercent = useMemo(() => {
-    if (!activeProcessMapWorkflow?.bottleneckStep?.duration_hours) return 20;
-    const hrs = Number(activeProcessMapWorkflow.bottleneckStep.duration_hours);
+    const step = activeProcessMapWorkflow?.bottleneckStep;
+    const hrs = Number(step?.duration_hours);
+    if (!step || !hrs) return null;
     const maxThreshold = 40.0;
-    const calc = Math.min(100, Math.max(5, (hrs / maxThreshold) * 100));
-    return Math.round(calc);
+    return Math.round(Math.min(100, Math.max(5, (hrs / maxThreshold) * 100)));
   }, [activeProcessMapWorkflow]);
 
+  // Default inspector selection: bottleneck if completed, otherwise the current step
   useEffect(() => {
-    if (activeProcessMapWorkflow?.bottleneckStep) {
-      setSelectedNode({
-        type: 'STEP',
-        stepData: activeProcessMapWorkflow.bottleneckStep,
-      });
-    } else if (
-      activeProcessMapWorkflow?.steps &&
-      activeProcessMapWorkflow.steps.length > 0
-    ) {
-      setSelectedNode({
-        type: 'STEP',
-        stepData: activeProcessMapWorkflow.steps[0],
-      });
-    }
+    const wf = activeProcessMapWorkflow;
+    if (!wf) return;
+    const target = wf.bottleneckStep || wf.currentStep || wf.steps?.[0];
+    if (target) setSelectedNode({ type: 'STEP', stepData: target });
   }, [activeProcessMapWorkflow]);
 
   // Dynamic Calculated Metrics for Overview
   const metrics = useMemo(() => {
-    const stepsWithDuration = allSteps.filter(
-      (s) => s.duration_hours && Number(s.duration_hours) > 0
-    );
+    // Only workflows the manager has approved count as "completed"
+    const approved = workflows.filter((wf) => wf.is_approved);
 
-    let avgTurnaroundDays = '0.0 days';
-    if (stepsWithDuration.length > 0) {
-      const totalHours = stepsWithDuration.reduce(
-        (acc, curr) => acc + Number(curr.duration_hours),
-        0
-      );
-      const avgHours = totalHours / stepsWithDuration.length;
-      avgTurnaroundDays = (avgHours / 24).toFixed(1) + ' days';
-    } else {
-      avgTurnaroundDays = '1.8 days';
-    }
+    const turnaround = average(
+      approved.map((wf) =>
+        computeTurnaroundDays(allSteps.filter((s) => String(s.workflow_id) === String(wf.id)))
+      )
+    );
+    const avgTurnaroundDays =
+      turnaround === null ? '—' : turnaround < 0.05 ? 'Same day' : `${turnaround.toFixed(1)} days`;
 
     const reviewedWorkflows = workflows.filter(
       (w) => w.quality_score && Number(w.quality_score) > 0
     );
-
-    let avgQualityScoreStr = 'N/A';
-    if (reviewedWorkflows.length > 0) {
-      const totalScore = reviewedWorkflows.reduce(
-        (acc, curr) => acc + Number(curr.quality_score),
-        0
-      );
-      avgQualityScoreStr =
-        (totalScore / reviewedWorkflows.length).toFixed(1) + '/5';
-    }
+    const avgQualityScoreStr = reviewedWorkflows.length
+      ? (
+          reviewedWorkflows.reduce((acc, curr) => acc + Number(curr.quality_score), 0) /
+          reviewedWorkflows.length
+        ).toFixed(1) + '/5'
+      : 'N/A';
 
     const totalCompleted = allSteps.filter(
       (s) => s.status === 'APPROVED' || s.status === 'COMPLETED'
     ).length;
     const totalPending = allSteps.filter((s) => s.status === 'PENDING').length;
-
-    let reworkRate = '-50%';
-    if (totalCompleted + totalPending > 0) {
-      const calcRate = Math.round(
-        (totalCompleted / (totalCompleted + totalPending)) * 100
-      );
-      reworkRate = `${calcRate}%`;
-    }
-
-    const bottleneckCount = activeProcessMapWorkflow?.bottleneckStep ? 1 : 0;
+    const reworkRate =
+      totalCompleted + totalPending > 0
+        ? `${Math.round((totalCompleted / (totalCompleted + totalPending)) * 100)}%`
+        : '—';
 
     return {
       avgTurnaroundDays,
       avgQualityScoreStr,
       reworkRate,
-      bottlenecksCount: bottleneckCount,
+      bottlenecksCount: activeProcessMapWorkflow?.bottleneckStep ? 1 : 0,
     };
   }, [allSteps, workflows, activeProcessMapWorkflow]);
+
+  // Efficiency: this manager's department vs the whole organization (the benchmark)
+  const efficiency = useMemo(() => {
+    const email = (profile?.email || '').toLowerCase().trim();
+    const dept = (profile?.department || '').toLowerCase().trim();
+    const approved = workflows.filter((wf) => wf.is_approved);
+
+    const isMine = (wf) =>
+      (wf.manager_email || '').toLowerCase().trim() === email ||
+      (dept !== '' && (wf.department || '').toLowerCase().trim() === dept);
+
+    const effOf = (wf) =>
+      computeWorkflowEfficiency(
+        wf,
+        allSteps.filter((s) => String(s.workflow_id) === String(wf.id))
+      );
+
+    const mine = average(approved.filter(isMine).map(effOf));
+    const org = average(approved.map(effOf));
+
+    let message = 'Complete and approve a workflow to see efficiency.';
+    let ringClass = 'border-slate-300 text-slate-400';
+    let messageClass = 'text-slate-400';
+
+    if (mine === null && org !== null) {
+      message = 'No completed workflows in your department yet.';
+    } else if (mine !== null && org !== null) {
+      const diff = Math.round(mine - org);
+      if (diff === 0) {
+        message = 'In line with the organization average.';
+        ringClass = 'border-emerald-500 text-emerald-700';
+        messageClass = 'text-emerald-600';
+      } else if (diff > 0) {
+        message = `You are performing ${diff} pts above the organization average.`;
+        ringClass = 'border-emerald-500 text-emerald-700';
+        messageClass = 'text-emerald-600';
+      } else {
+        message = `You are performing ${Math.abs(diff)} pts below the organization average.`;
+        ringClass = 'border-amber-500 text-amber-700';
+        messageClass = 'text-amber-600';
+      }
+    }
+
+    return { mine, org, message, ringClass, messageClass };
+  }, [workflows, allSteps, profile]);
 
   const calculatedAvgQuality = useMemo(() => {
     const avg = (
@@ -734,9 +795,7 @@ export default function ManagerDashboard() {
           .eq('id', activeReviewStep.workflow_id);
       }
 
-      setSuccessMsg(
-        `Quality review locked successfully! Score: ${calculatedAvgQuality} / 5.0`
-      );
+      setSuccessMsg(`Quality review locked successfully! Score: ${calculatedAvgQuality} / 5.0`);
       setReviewComments('');
       await loadManagerData();
     } catch (err) {
@@ -782,9 +841,7 @@ export default function ManagerDashboard() {
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2 bg-[#F1F5F9]/80 border border-slate-200/60 rounded-full px-3.5 py-1.5 text-slate-600">
             <User className="w-3.5 h-3.5 text-slate-400" />
-            <span className="text-xs font-medium text-slate-600">
-              {profile?.email}
-            </span>
+            <span className="text-xs font-medium text-slate-600">{profile?.email}</span>
           </div>
           <button
             onClick={handleLogout}
@@ -879,8 +936,7 @@ export default function ManagerDashboard() {
                     className="text-3xl font-normal text-[#1F1F3B]"
                     style={{ fontFamily: "'Marcellus', serif" }}
                   >
-                    Welcome back,{' '}
-                    {profile?.full_name?.split(' ')[0] || 'Manager'}
+                    Welcome back, {profile?.full_name?.split(' ')[0] || 'Manager'}
                   </h1>
                   <p className="text-xs text-slate-500 mt-1">
                     A quick summary of your team's workflows. Open a tab on the left for details.
@@ -890,8 +946,7 @@ export default function ManagerDashboard() {
                   <div
                     onClick={() => {
                       setActiveTab('quality-review');
-                      if (pendingReviews.length > 0)
-                        setActiveReviewStep(pendingReviews[0]);
+                      if (pendingReviews.length > 0) setActiveReviewStep(pendingReviews[0]);
                     }}
                     className="bg-amber-50/90 hover:bg-amber-100 border border-amber-200/80 rounded-2xl p-4 flex items-center gap-3 shrink-0 cursor-pointer transition-all shadow-xs group"
                   >
@@ -899,9 +954,7 @@ export default function ManagerDashboard() {
                       <Clock className="w-5 h-5" />
                     </div>
                     <div>
-                      <p className="text-xs font-bold text-slate-900">
-                        Pending your review
-                      </p>
+                      <p className="text-xs font-bold text-slate-900">Pending your review</p>
                       <p className="text-[11px] text-amber-800 font-medium group-hover:underline flex items-center gap-1">
                         Click here to review {pendingReviews.length} deliverable
                         {pendingReviews.length > 1 ? 's' : ''} &rarr;
@@ -911,7 +964,7 @@ export default function ManagerDashboard() {
                 )}
               </div>
 
-              {/* STAT CARDS (ADDED COMPLETED WORKFLOWS CARD HERE) */}
+              {/* STAT CARDS */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
                 <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col justify-between h-36">
                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
@@ -956,7 +1009,7 @@ export default function ManagerDashboard() {
 
                 <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col justify-between h-36">
                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                    REWORK REDUCTION
+                    STEP COMPLETION
                   </p>
                   <p
                     className="text-3xl font-normal text-slate-900"
@@ -979,21 +1032,22 @@ export default function ManagerDashboard() {
                 </div>
               </div>
 
-              {/* PROCESS EFFICIENCY & HEATMAP WITH DYNAMIC LINE */}
+              {/* PROCESS EFFICIENCY & HEATMAP */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-6">
-                  <div className="w-20 h-20 rounded-full border-4 border-emerald-500 text-emerald-700 flex items-center justify-center text-lg font-bold shrink-0">
-                    89%
+                  <div
+                    className={`w-20 h-20 rounded-full border-4 flex items-center justify-center text-lg font-bold shrink-0 ${efficiency.ringClass}`}
+                  >
+                    {efficiency.mine === null ? '—' : `${Math.round(efficiency.mine)}%`}
                   </div>
                   <div>
-                    <h3 className="text-sm font-bold text-slate-900">
-                      Overall Process Efficiency
-                    </h3>
+                    <h3 className="text-sm font-bold text-slate-900">Overall Process Efficiency</h3>
                     <p className="text-xs text-slate-500 mt-0.5">
-                      Departmental Industry Benchmark: 70%
+                      Organization Average:{' '}
+                      {efficiency.org === null ? '—' : `${Math.round(efficiency.org)}%`}
                     </p>
-                    <p className="text-xs text-emerald-600 font-medium mt-1">
-                      You are performing 19% above departmental benchmark.
+                    <p className={`text-xs font-medium mt-1 ${efficiency.messageClass}`}>
+                      {efficiency.message}
                     </p>
                   </div>
                 </div>
@@ -1001,30 +1055,33 @@ export default function ManagerDashboard() {
                 <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs space-y-4">
                   <div className="flex items-center justify-between">
                     <h3 className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
-                      Bottleneck Heatmap{' '}
-                      <Info className="w-3.5 h-3.5 text-slate-400" />
+                      Bottleneck Heatmap <Info className="w-3.5 h-3.5 text-slate-400" />
                     </h3>
                   </div>
-                  {/* HEATMAP BAR WITH INDICATOR LINE */}
                   <div className="relative pt-4 pb-1">
                     <div className="w-full h-3 bg-gradient-to-r from-emerald-400 via-amber-400 to-red-500 rounded-full" />
-                    {/* BOTTLENECK POSITION LINE & TOOLTIP MARKER */}
-                    <div
-                      className="absolute top-0 flex flex-col items-center -translate-x-1/2 transition-all duration-300"
-                      style={{ left: `${bottleneckPercent}%` }}
-                    >
-                      <span className="text-[9px] font-bold text-slate-800 bg-white px-1.5 py-0.5 rounded-md border border-slate-200 shadow-xs mb-0.5">
-                        {activeProcessMapWorkflow?.bottleneckStep?.duration_hours || 0}{' '}
-                        hrs
-                      </span>
-                      <div className="w-1 h-5 bg-[#1E2540] rounded-full shadow-md border border-white" />
-                    </div>
+                    {bottleneckPercent !== null && (
+                      <div
+                        className="absolute top-0 flex flex-col items-center -translate-x-1/2 transition-all duration-300"
+                        style={{ left: `${bottleneckPercent}%` }}
+                      >
+                        <span className="text-[9px] font-bold text-slate-800 bg-white px-1.5 py-0.5 rounded-md border border-slate-200 shadow-xs mb-0.5">
+                          {activeProcessMapWorkflow?.bottleneckStep?.duration_hours || 0} hrs
+                        </span>
+                        <div className="w-1 h-5 bg-[#1E2540] rounded-full shadow-md border border-white" />
+                      </div>
+                    )}
                   </div>
                   <div className="flex justify-between text-[10px] font-semibold text-slate-400 pt-1">
                     <span>Low Impact</span>
                     <span>Moderate Impact</span>
                     <span>High Impact</span>
                   </div>
+                  {bottleneckPercent === null && (
+                    <p className="text-[10px] text-slate-400 italic pt-1">
+                      Shown once the workflow is completed and quality-reviewed.
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -1037,13 +1094,25 @@ export default function ManagerDashboard() {
                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                     PROCESS MAP
                   </p>
-                  <p className="text-lg font-bold text-red-600">
-                    {metrics.bottlenecksCount} bottlenecks
+                  <p
+                    className={`text-lg font-bold ${
+                      activeProcessMapWorkflow?.isCompleted ? 'text-red-600' : 'text-[#1E2540]'
+                    }`}
+                  >
+                    {activeProcessMapWorkflow?.isCompleted
+                      ? `${metrics.bottlenecksCount} bottleneck${metrics.bottlenecksCount === 1 ? '' : 's'}`
+                      : activeProcessMapWorkflow?.currentStep
+                      ? `On Step ${activeProcessMapWorkflow.currentStep.step_order || 1}`
+                      : activeProcessMapWorkflow?.awaitingReview
+                      ? 'Awaiting review'
+                      : 'Not started'}
                   </p>
                   <p className="text-xs text-slate-500">
-                    {activeProcessMapWorkflow?.bottleneckStep?.task_name
-                      ? `Step: ${activeProcessMapWorkflow.bottleneckStep.task_name}`
-                      : 'Active operational bottlenecks'}
+                    {activeProcessMapWorkflow?.isCompleted
+                      ? activeProcessMapWorkflow?.bottleneckStep?.task_name
+                        ? `Step: ${activeProcessMapWorkflow.bottleneckStep.task_name}`
+                        : 'No bottlenecks detected'
+                      : activeProcessMapWorkflow?.currentStep?.task_name || 'Current step shown here'}
                   </p>
                   <div className="flex items-center gap-1 text-xs font-semibold text-[#1E2540] pt-2 group-hover:translate-x-1 transition-transform">
                     <span>Learn more</span> <ChevronRight className="w-4 h-4" />
@@ -1053,8 +1122,7 @@ export default function ManagerDashboard() {
                 <div
                   onClick={() => {
                     setActiveTab('quality-review');
-                    if (pendingReviews.length > 0)
-                      setActiveReviewStep(pendingReviews[0]);
+                    if (pendingReviews.length > 0) setActiveReviewStep(pendingReviews[0]);
                   }}
                   className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs hover:border-slate-300 cursor-pointer space-y-2 group"
                 >
@@ -1064,9 +1132,7 @@ export default function ManagerDashboard() {
                   <p className="text-lg font-bold text-amber-500">
                     {pendingReviews.length} awaiting
                   </p>
-                  <p className="text-xs text-slate-500">
-                    Final deliverables awaiting review gate
-                  </p>
+                  <p className="text-xs text-slate-500">Final deliverables awaiting review gate</p>
                   <div className="flex items-center gap-1 text-xs font-semibold text-[#1E2540] pt-2 group-hover:translate-x-1 transition-transform">
                     <span>Learn more</span> <ChevronRight className="w-4 h-4" />
                   </div>
@@ -1079,12 +1145,8 @@ export default function ManagerDashboard() {
                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                     WORKFLOWS
                   </p>
-                  <p className="text-lg font-bold text-slate-900">
-                    {activeWorkflows.length} active
-                  </p>
-                  <p className="text-xs text-slate-500">
-                    All department process maps
-                  </p>
+                  <p className="text-lg font-bold text-slate-900">{activeWorkflows.length} active</p>
+                  <p className="text-xs text-slate-500">All department process maps</p>
                   <div className="flex items-center gap-1 text-xs font-semibold text-[#1E2540] pt-2 group-hover:translate-x-1 transition-transform">
                     <span>Learn more</span> <ChevronRight className="w-4 h-4" />
                   </div>
@@ -1128,10 +1190,7 @@ export default function ManagerDashboard() {
                 )}
               </div>
 
-              <ProcessMap
-                steps={activeProcessMapWorkflow?.steps || []}
-                initialMode="T0"
-              />
+              <ProcessMap steps={activeProcessMapWorkflow?.steps || []} initialMode="T0" />
 
               {/* VISUAL PROCESS MAP CANVAS */}
               <div className="bg-white p-8 rounded-2xl border border-slate-200/80 shadow-xs space-y-8 overflow-x-auto">
@@ -1142,32 +1201,26 @@ export default function ManagerDashboard() {
                   >
                     <div
                       className={`w-12 h-12 rounded-full bg-[#1E2D5A] text-white font-bold text-xs flex items-center justify-center shadow-md transition-transform group-hover:scale-105 ${
-                        selectedNode?.type === 'START'
-                          ? 'ring-4 ring-[#1E2D5A] ring-offset-2'
-                          : ''
+                        selectedNode?.type === 'START' ? 'ring-4 ring-[#1E2D5A] ring-offset-2' : ''
                       }`}
                     >
                       Start
                     </div>
                   </div>
 
-                  {activeProcessMapWorkflow?.steps &&
-                    activeProcessMapWorkflow.steps.length > 0 && (
-                      <div className="flex-1 flex flex-col items-center justify-center px-2 relative z-0">
-                        <div className="w-full h-0.5 bg-slate-300 relative flex items-center justify-center" />
-                      </div>
-                    )}
+                  {activeProcessMapWorkflow?.steps && activeProcessMapWorkflow.steps.length > 0 && (
+                    <div className="flex-1 flex flex-col items-center justify-center px-2 relative z-0">
+                      <div className="w-full h-0.5 bg-slate-300 relative flex items-center justify-center" />
+                    </div>
+                  )}
 
-                  {activeProcessMapWorkflow?.steps &&
-                  activeProcessMapWorkflow.steps.length > 0 ? (
+                  {activeProcessMapWorkflow?.steps && activeProcessMapWorkflow.steps.length > 0 ? (
                     activeProcessMapWorkflow.steps.map((st, idx) => {
-                      const isBottleneck =
-                        activeProcessMapWorkflow.bottleneckStep?.id === st.id;
+                      const isBottleneck = activeProcessMapWorkflow.bottleneckStep?.id === st.id;
+                      const isCurrent = activeProcessMapWorkflow.currentStep?.id === st.id;
                       const isSelected =
-                        selectedNode?.type === 'STEP' &&
-                        selectedNode?.stepData?.id === st.id;
-                      const isLastStep =
-                        idx === activeProcessMapWorkflow.steps.length - 1;
+                        selectedNode?.type === 'STEP' && selectedNode?.stepData?.id === st.id;
+                      const isLastStep = idx === activeProcessMapWorkflow.steps.length - 1;
                       const stepPerformerName = getPerformerName(st);
                       const durationVal = st.duration_hours
                         ? (Number(st.duration_hours) / 24).toFixed(1) + ' days'
@@ -1185,23 +1238,21 @@ export default function ManagerDashboard() {
                       return (
                         <React.Fragment key={st.id}>
                           <div
-                            onClick={() =>
-                              setSelectedNode({ type: 'STEP', stepData: st })
-                            }
+                            onClick={() => setSelectedNode({ type: 'STEP', stepData: st })}
                             className="relative z-10 flex flex-col items-center gap-2 cursor-pointer group"
                           >
                             <div
                               className={`relative ${
                                 isBottleneck
                                   ? 'p-2 rounded-full bg-red-100/80 animate-pulse'
+                                  : isCurrent
+                                  ? 'p-2 rounded-full bg-indigo-100/80 animate-pulse'
                                   : ''
                               }`}
                             >
                               <div
                                 className={`w-14 h-14 rounded-full flex items-center justify-center text-xs font-bold text-white shadow-md transition-transform group-hover:scale-110 ${nodeBg} ${
-                                  isSelected
-                                    ? 'ring-4 ring-slate-800 ring-offset-2 shadow-lg'
-                                    : ''
+                                  isSelected ? 'ring-4 ring-slate-800 ring-offset-2 shadow-lg' : ''
                                 }`}
                               >
                                 Step {st.step_order || idx + 1}
@@ -1210,6 +1261,11 @@ export default function ManagerDashboard() {
                             <span className="text-[11px] font-bold text-slate-800 max-w-[100px] text-center leading-tight">
                               {st.task_name || `Step ${idx + 1}`}
                             </span>
+                            {isCurrent && (
+                              <span className="text-[9px] font-bold text-indigo-600 uppercase tracking-wider">
+                                In progress
+                              </span>
+                            )}
                           </div>
 
                           {!isLastStep && (
@@ -1244,9 +1300,7 @@ export default function ManagerDashboard() {
                   >
                     <div
                       className={`w-12 h-12 rounded-full bg-[#0B4F42] text-white font-bold text-xs flex items-center justify-center shadow-md transition-transform group-hover:scale-105 ${
-                        selectedNode?.type === 'END'
-                          ? 'ring-4 ring-[#0B4F42] ring-offset-2'
-                          : ''
+                        selectedNode?.type === 'END' ? 'ring-4 ring-[#0B4F42] ring-offset-2' : ''
                       }`}
                     >
                       End
@@ -1256,26 +1310,57 @@ export default function ManagerDashboard() {
 
                 {/* DYNAMIC INSPECTOR BREAKDOWN CARD */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4 border-t border-slate-100">
-                  <div className="bg-red-950 text-white p-6 rounded-2xl space-y-2">
-                    <div className="flex items-center gap-2 text-red-400 font-bold text-xs uppercase">
-                      <AlertTriangle className="w-4 h-4" />
-                      <span>Operational Bottlenecks</span>
+                  {activeProcessMapWorkflow?.isCompleted ? (
+                    <div className="bg-red-950 text-white p-6 rounded-2xl space-y-2">
+                      <div className="flex items-center gap-2 text-red-400 font-bold text-xs uppercase">
+                        <AlertTriangle className="w-4 h-4" />
+                        <span>Operational Bottlenecks</span>
+                      </div>
+                      {activeProcessMapWorkflow.bottleneckStep ? (
+                        <p className="text-xs leading-relaxed text-red-100">
+                          Bottleneck detected on{' '}
+                          <b>
+                            Step {activeProcessMapWorkflow.bottleneckStep.step_order || 1}:{' '}
+                            {activeProcessMapWorkflow.bottleneckStep.task_name}
+                          </b>
+                          , taking {activeProcessMapWorkflow.bottleneckStep.duration_hours || 0} hrs to
+                          complete.
+                        </p>
+                      ) : (
+                        <p className="text-xs leading-relaxed text-red-100">
+                          No major operational bottlenecks detected for this process flow.
+                        </p>
+                      )}
                     </div>
-                    {activeProcessMapWorkflow?.bottleneckStep ? (
-                      <p className="text-xs leading-relaxed text-red-100">
-                        Operational bottleneck detected on <b>Step {activeProcessMapWorkflow.bottleneckStep.step_order || 1}: {activeProcessMapWorkflow.bottleneckStep.task_name}</b>, taking{' '}
-                        {(
-                          (activeProcessMapWorkflow.bottleneckStep
-                            .duration_hours || 32) / 24
-                        ).toFixed(1)}{' '}
-                        days to complete.
-                      </p>
-                    ) : (
-                      <p className="text-xs leading-relaxed text-red-100">
-                        No major operational bottlenecks detected for this process flow.
-                      </p>
-                    )}
-                  </div>
+                  ) : (
+                    <div className="bg-[#1E2540] text-white p-6 rounded-2xl space-y-2">
+                      <div className="flex items-center gap-2 text-indigo-200 font-bold text-xs uppercase">
+                        <Clock className="w-4 h-4" />
+                        <span>Current Step</span>
+                      </div>
+                      {activeProcessMapWorkflow?.currentStep ? (
+                        <p className="text-xs leading-relaxed text-indigo-100">
+                          Currently on{' '}
+                          <b>
+                            Step {activeProcessMapWorkflow.currentStep.step_order || 1}:{' '}
+                            {activeProcessMapWorkflow.currentStep.task_name}
+                          </b>
+                          {activeProcessMapWorkflow.currentStep.performer_id
+                            ? `, with ${getPerformerName(activeProcessMapWorkflow.currentStep)}`
+                            : ''}
+                          . Bottlenecks appear once this workflow is completed and quality-reviewed.
+                        </p>
+                      ) : activeProcessMapWorkflow?.awaitingReview ? (
+                        <p className="text-xs leading-relaxed text-indigo-100">
+                          All steps are logged. This workflow is awaiting your quality review.
+                        </p>
+                      ) : (
+                        <p className="text-xs leading-relaxed text-indigo-100">
+                          No steps have been started for this workflow yet.
+                        </p>
+                      )}
+                    </div>
+                  )}
 
                   <div className="md:col-span-2 bg-[#F8FAFC] p-6 rounded-2xl border border-slate-200/60 space-y-3">
                     {selectedNode?.type === 'START' && (
@@ -1288,24 +1373,16 @@ export default function ManagerDashboard() {
                         </div>
                         <div className="grid grid-cols-2 gap-4 text-xs pt-2">
                           <div>
-                            <p className="text-slate-400 text-[10px] font-bold uppercase">
-                              Performer
-                            </p>
+                            <p className="text-slate-400 text-[10px] font-bold uppercase">Performer</p>
                             <p className="font-medium text-slate-800">System</p>
                           </div>
                           <div>
-                            <p className="text-slate-400 text-[10px] font-bold uppercase">
-                              Time Logged
-                            </p>
+                            <p className="text-slate-400 text-[10px] font-bold uppercase">Time Logged</p>
                             <p className="font-medium text-slate-800">0.0 days</p>
                           </div>
                           <div>
-                            <p className="text-slate-400 text-[10px] font-bold uppercase">
-                              AI Tools
-                            </p>
-                            <p className="font-medium text-slate-800">
-                              None reported
-                            </p>
+                            <p className="text-slate-400 text-[10px] font-bold uppercase">AI Tools</p>
+                            <p className="font-medium text-slate-800">None reported</p>
                           </div>
                           <div>
                             <p className="text-slate-400 text-[10px] font-bold uppercase">
@@ -1319,66 +1396,55 @@ export default function ManagerDashboard() {
                       </>
                     )}
 
-                    {selectedNode?.type === 'STEP' &&
-                      selectedNode?.stepData && (
-                        <>
-                          <div className="flex items-center justify-between">
-                            <h4 className="text-xs font-bold text-slate-900 flex items-center gap-2">
-                              <span className="w-2.5 h-2.5 rounded-full bg-slate-800" />
-                              Step {selectedNode.stepData.step_order || 1}:{' '}
-                              {selectedNode.stepData.task_name}
-                              {activeProcessMapWorkflow?.bottleneckStep?.id ===
-                                selectedNode.stepData.id && (
-                                <span className="bg-red-100 text-red-700 text-[9px] px-2 py-0.5 rounded-full font-bold ml-2">
-                                  Primary Bottleneck
-                                </span>
-                              )}
-                            </h4>
+                    {selectedNode?.type === 'STEP' && selectedNode?.stepData && (
+                      <>
+                        <div className="flex items-center justify-between">
+                          <h4 className="text-xs font-bold text-slate-900 flex items-center gap-2">
+                            <span className="w-2.5 h-2.5 rounded-full bg-slate-800" />
+                            Step {selectedNode.stepData.step_order || 1}: {selectedNode.stepData.task_name}
+                            {activeProcessMapWorkflow?.bottleneckStep?.id === selectedNode.stepData.id && (
+                              <span className="bg-red-100 text-red-700 text-[9px] px-2 py-0.5 rounded-full font-bold ml-2">
+                                Primary Bottleneck
+                              </span>
+                            )}
+                            {activeProcessMapWorkflow?.currentStep?.id === selectedNode.stepData.id && (
+                              <span className="bg-indigo-100 text-indigo-700 text-[9px] px-2 py-0.5 rounded-full font-bold ml-2">
+                                In progress
+                              </span>
+                            )}
+                          </h4>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4 text-xs pt-2">
+                          <div>
+                            <p className="text-slate-400 text-[10px] font-bold uppercase">Performer</p>
+                            <p className="font-medium text-slate-800">
+                              {getPerformerName(selectedNode.stepData)}
+                            </p>
                           </div>
-                          <div className="grid grid-cols-2 gap-4 text-xs pt-2">
-                            <div>
-                              <p className="text-slate-400 text-[10px] font-bold uppercase">
-                                Performer
-                              </p>
-                              <p className="font-medium text-slate-800">
-                                {getPerformerName(selectedNode.stepData)}
-                              </p>
-                            </div>
-                            <div>
-                              <p className="text-slate-400 text-[10px] font-bold uppercase">
-                                Time Logged
-                              </p>
-                              <p className="font-medium text-slate-800">
-                                {(
-                                  (selectedNode.stepData.duration_hours || 0) /
-                                  24
-                                ).toFixed(1)}{' '}
-                                days (
-                                {selectedNode.stepData.duration_hours || 0} hrs)
-                              </p>
-                            </div>
-                            <div>
-                              <p className="text-slate-400 text-[10px] font-bold uppercase">
-                                AI Tools
-                              </p>
-                              <p className="font-medium text-slate-800">
-                                {selectedNode.stepData.tools_tagged?.join(
-                                  ', '
-                                ) || 'Copilot, Perplexity'}
-                              </p>
-                            </div>
-                            <div>
-                              <p className="text-slate-400 text-[10px] font-bold uppercase">
-                                Deliverable Summary
-                              </p>
-                              <p className="font-medium text-slate-800 italic">
-                                "{selectedNode.stepData.deliverable_summary ||
-                                  'Deliverable output logged'}"
-                              </p>
-                            </div>
+                          <div>
+                            <p className="text-slate-400 text-[10px] font-bold uppercase">Time Logged</p>
+                            <p className="font-medium text-slate-800">
+                              {((selectedNode.stepData.duration_hours || 0) / 24).toFixed(1)} days (
+                              {selectedNode.stepData.duration_hours || 0} hrs)
+                            </p>
                           </div>
-                        </>
-                      )}
+                          <div>
+                            <p className="text-slate-400 text-[10px] font-bold uppercase">AI Tools</p>
+                            <p className="font-medium text-slate-800">
+                              {selectedNode.stepData.tools_tagged?.join(', ') || 'None reported'}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-slate-400 text-[10px] font-bold uppercase">
+                              Deliverable Summary
+                            </p>
+                            <p className="font-medium text-slate-800 italic">
+                              "{selectedNode.stepData.deliverable_summary || 'Deliverable output logged'}"
+                            </p>
+                          </div>
+                        </div>
+                      </>
+                    )}
 
                     {selectedNode?.type === 'END' && (
                       <>
@@ -1390,26 +1456,18 @@ export default function ManagerDashboard() {
                         </div>
                         <div className="grid grid-cols-2 gap-4 text-xs pt-2">
                           <div>
-                            <p className="text-slate-400 text-[10px] font-bold uppercase">
-                              Performer
-                            </p>
+                            <p className="text-slate-400 text-[10px] font-bold uppercase">Performer</p>
                             <p className="font-medium text-slate-800">
                               {profile?.full_name || 'Manager'}
                             </p>
                           </div>
                           <div>
-                            <p className="text-slate-400 text-[10px] font-bold uppercase">
-                              Time Logged
-                            </p>
+                            <p className="text-slate-400 text-[10px] font-bold uppercase">Time Logged</p>
                             <p className="font-medium text-slate-800">0.0 days</p>
                           </div>
                           <div>
-                            <p className="text-slate-400 text-[10px] font-bold uppercase">
-                              AI Tools
-                            </p>
-                            <p className="font-medium text-slate-800">
-                              None reported
-                            </p>
+                            <p className="text-slate-400 text-[10px] font-bold uppercase">AI Tools</p>
+                            <p className="font-medium text-slate-800">None reported</p>
                           </div>
                           <div>
                             <p className="text-slate-400 text-[10px] font-bold uppercase">
@@ -1441,27 +1499,21 @@ export default function ManagerDashboard() {
                     <ArrowRight className="w-4 h-4 text-slate-500 shrink-0 mt-0.5" />
                     <div>
                       <p className="font-bold text-slate-900">Flow Direction</p>
-                      <p className="text-[11px] text-slate-500">
-                        Sequence of the process.
-                      </p>
+                      <p className="text-[11px] text-slate-500">Sequence of the process.</p>
                     </div>
                   </div>
                   <div className="flex items-start gap-2.5">
                     <Users className="w-4 h-4 text-slate-500 shrink-0 mt-0.5" />
                     <div>
                       <p className="font-bold text-slate-900">Handoff Ownership</p>
-                      <p className="text-[11px] text-slate-500">
-                        Who hands off between steps.
-                      </p>
+                      <p className="text-[11px] text-slate-500">Who hands off between steps.</p>
                     </div>
                   </div>
                   <div className="flex items-start gap-2.5">
                     <Clock className="w-4 h-4 text-slate-500 shrink-0 mt-0.5" />
                     <div>
                       <p className="font-bold text-slate-900">Cycle Time</p>
-                      <p className="text-[11px] text-slate-500">
-                        Days to complete each handoff.
-                      </p>
+                      <p className="text-[11px] text-slate-500">Days to complete each handoff.</p>
                     </div>
                   </div>
                 </div>
@@ -1544,10 +1596,7 @@ export default function ManagerDashboard() {
                         step="0.1"
                         value={ratings.accuracy}
                         onChange={(e) =>
-                          setRatings({
-                            ...ratings,
-                            accuracy: parseFloat(e.target.value),
-                          })
+                          setRatings({ ...ratings, accuracy: parseFloat(e.target.value) })
                         }
                         className="w-full accent-[#1E2540] cursor-pointer"
                       />
@@ -1565,10 +1614,7 @@ export default function ManagerDashboard() {
                         step="0.1"
                         value={ratings.completeness}
                         onChange={(e) =>
-                          setRatings({
-                            ...ratings,
-                            completeness: parseFloat(e.target.value),
-                          })
+                          setRatings({ ...ratings, completeness: parseFloat(e.target.value) })
                         }
                         className="w-full accent-[#1E2540] cursor-pointer"
                       />
@@ -1586,10 +1632,7 @@ export default function ManagerDashboard() {
                         step="0.1"
                         value={ratings.actionability}
                         onChange={(e) =>
-                          setRatings({
-                            ...ratings,
-                            actionability: parseFloat(e.target.value),
-                          })
+                          setRatings({ ...ratings, actionability: parseFloat(e.target.value) })
                         }
                         className="w-full accent-[#1E2540] cursor-pointer"
                       />
@@ -1636,9 +1679,7 @@ export default function ManagerDashboard() {
                       disabled={isSubmitting}
                       className="px-6 py-3.5 bg-[#1E2540] hover:bg-slate-800 text-white font-bold text-xs rounded-xl cursor-pointer transition-colors shadow-xs disabled:opacity-50"
                     >
-                      {isSubmitting
-                        ? 'Locking Score...'
-                        : 'Approve & Lock Quality Score'}
+                      {isSubmitting ? 'Locking Score...' : 'Approve & Lock Quality Score'}
                     </button>
                   </div>
                 </form>
@@ -1678,29 +1719,21 @@ export default function ManagerDashboard() {
                   </div>
                 ) : (
                   workflows.map((wf) => {
-                    const wfSteps = allSteps.filter(
-                      (s) => String(s.workflow_id) === String(wf.id)
-                    );
+                    const wfSteps = allSteps.filter((s) => String(s.workflow_id) === String(wf.id));
                     const isCompleted =
                       wf.is_approved ||
                       (wfSteps.length > 0 &&
-                        wfSteps.every(
-                          (s) =>
-                            s.status === 'APPROVED' || s.status === 'COMPLETED'
-                        ));
+                        wfSteps.every((s) => s.status === 'APPROVED' || s.status === 'COMPLETED'));
 
                     return (
                       <div
                         key={wf.id}
                         className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs space-y-2 hover:border-slate-300 transition-colors"
                       >
-                        <h3 className="text-lg font-bold text-slate-900">
-                          {wf.title || wf.name}
-                        </h3>
+                        <h3 className="text-lg font-bold text-slate-900">{wf.title || wf.name}</h3>
                         <p className="text-xs text-slate-500">
                           {wfSteps.length} steps &bull;{' '}
-                          {wf.department || profile?.department || 'Department'}{' '}
-                          &bull;{' '}
+                          {wf.department || profile?.department || 'Department'} &bull;{' '}
                           {isCompleted ? (
                             <span className="text-emerald-700 font-semibold bg-emerald-50 px-2 py-0.5 rounded-full">
                               Completed process

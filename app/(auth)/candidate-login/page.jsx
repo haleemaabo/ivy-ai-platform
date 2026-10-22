@@ -108,7 +108,7 @@ export default function CandidateLoginPage() {
 
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
-        redirectTo: `${window.location.origin}/forgot-password`,
+        redirectTo: `${window.location.origin}/reset-password`,
       });
 
       if (error) throw error;
@@ -139,11 +139,9 @@ export default function CandidateLoginPage() {
           throw new Error('Please fulfill all password requirements before continuing.');
         }
 
-        // 1. Verify pre-approval in profiles table
+        // 1. Verify pre-approval (RPC works before login and bypasses RLS safely)
         const { data: existingProfile, error: profileCheckError } = await supabase
-          .from('profiles')
-          .select('*')
-          .ilike('email', cleanEmail)
+          .rpc('check_email_preapproved', { p_email: cleanEmail })
           .maybeSingle();
 
         if (profileCheckError) throw profileCheckError;
@@ -162,7 +160,7 @@ export default function CandidateLoginPage() {
           email: cleanEmail,
           password: formData.password,
           options: {
-            data: { 
+            data: {
               full_name: formData.fullName || existingProfile.full_name,
               role: existingProfile.role,
             },
@@ -176,7 +174,8 @@ export default function CandidateLoginPage() {
           throw new Error('An account with this email already exists. Please log in directly or use "Forgot password?".');
         }
 
-        // 3. Link Profile record cleanly
+        // 3. Link Profile record (the DB trigger also does this; this is a harmless fallback
+        //    that only takes effect when a session exists right after signUp)
         if (authData?.user) {
           await supabase
             .from('profiles')
@@ -234,7 +233,7 @@ export default function CandidateLoginPage() {
 
   return (
     <div className="h-screen w-screen overflow-hidden flex text-[#1E293B] bg-white font-sans antialiased select-none">
-      
+
       {/* Confirmation Account Created Modal */}
       {showConfirmationModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
@@ -284,7 +283,7 @@ export default function CandidateLoginPage() {
       {/* RIGHT SECTION: Form & Logo */}
       <div className="flex-1 flex flex-col justify-center items-center px-8 py-6 relative bg-white h-full overflow-y-auto lg:overflow-hidden">
         <div className="w-full max-w-[420px] space-y-6">
-          
+
           {/* Company Brand Logo */}
           <div className="text-center space-y-3">
             <div className="flex justify-center mb-1">

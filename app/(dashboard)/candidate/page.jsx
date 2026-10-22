@@ -25,9 +25,9 @@ import {
 } from 'lucide-react';
 
 const marcellus = Marcellus({
-  weight: '400',
   subsets: ['latin'],
   variable: '--font-marcellus',
+  weight: '400',
 });
 
 const inter = Inter({
@@ -43,10 +43,6 @@ const AI_TOOLS = [
   'Gemini',
   'Midjourney'
 ];
-
-// ==========================================
-// 2. MAIN CANDIDATE DASHBOARD COMPONENT
-// ==========================================
 
 export default function CandidateDashboard() {
   const router = useRouter();
@@ -100,11 +96,9 @@ export default function CandidateDashboard() {
       // Fetch Candidate Profile
       const { data: profileData, error: profileErr } = await supabase
         .from('profiles')
-        .select(`
-          id, email, full_name, role, organization, department,
-          job_title, employee_id, city, country, gender, age, years_in_company,
-          years_in_role, created_at
-        `)
+        .select(
+          'id, email, full_name, role, organization, department, job_title, employee_id, city, country, gender, age, years_in_company, years_in_role, created_at'
+        )
         .eq('id', session.user.id)
         .maybeSingle();
 
@@ -262,7 +256,7 @@ export default function CandidateDashboard() {
       .sort((a, b) => (a.step_order || 0) - (b.step_order || 0));
   }, [allWorkflows, selectedWorkflowId, workflowTemplates]);
 
-  // Count steps performed specifically by this user (where performer_id === profile.id and status is completed/approved)
+  // Count steps performed specifically by this user
   const completedStepsCount = useMemo(() => {
     if (!profile?.id) return 0;
     return assignedSteps.filter(
@@ -282,6 +276,7 @@ export default function CandidateDashboard() {
       );
       return;
     }
+
     let updated = selectedTools.filter((t) => t !== 'No AI tools used');
     if (updated.includes(tool)) {
       updated = updated.filter((t) => t !== tool);
@@ -305,7 +300,7 @@ export default function CandidateDashboard() {
       return setErrorMsg('Please specify the other AI tool used.');
     if (!hours || Number(hours) <= 0) return setErrorMsg('Please enter valid active work hours.');
     if (handoffType === 'COLLEAGUE' && !handoffTarget)
-      return setErrorMsg('Please select a colleague to hand off the next step.');
+      return setErrorMsg('Please select a candidate to hand off the next step.');
     if (handoffType === 'MANAGER' && !selectedManagerId)
       return setErrorMsg('Please select a manager to submit the workflow.');
 
@@ -315,6 +310,7 @@ export default function CandidateDashboard() {
       const stepToUpdate = allWorkflows.find((s) => String(s.id) === String(selectedStepId));
       const toolsArray = selectedTools.map((t) => (t === 'Other' ? otherTool : t));
       const finalStatus = handoffType === 'MANAGER' ? 'SUBMITTED TO MANAGER' : 'APPROVED';
+
       const targetColleagueId = handoffType === 'COLLEAGUE' ? handoffTarget : null;
       const targetManagerId = handoffType === 'MANAGER' ? selectedManagerId : null;
       const finalHandoffTarget = targetColleagueId || targetManagerId;
@@ -322,7 +318,7 @@ export default function CandidateDashboard() {
       const { error: updateErr } = await supabase
         .from('workflow_steps')
         .update({
-          performer_id: profile.id, // Sets the current user's ID as performer
+          performer_id: profile.id,
           status: finalStatus,
           completed_date: endDate,
           end_time: new Date().toISOString(),
@@ -339,9 +335,12 @@ export default function CandidateDashboard() {
       if (updateErr) throw updateErr;
 
       if (handoffType === 'COLLEAGUE' && handoffTarget) {
-        const targetUser = colleagues.find(
+        // Includes profile for self-handoff matching
+        const allCandidates = [profile, ...colleagues].filter(Boolean);
+        const targetUser = allCandidates.find(
           (c) => c.id === handoffTarget || c.email === handoffTarget
         );
+
         const selectedWfHeader = workflowTemplates.find(
           (wf) => String(wf.id) === String(selectedWorkflowId)
         );
@@ -406,11 +405,16 @@ export default function CandidateDashboard() {
         });
       }
 
+      const isSelfHandoff = handoffType === 'COLLEAGUE' && handoffTarget === profile?.id;
+
       setSuccessMsg(
         handoffType === 'MANAGER'
           ? 'Workflow process finalized and submitted to manager for review!'
+          : isSelfHandoff
+          ? 'Step completed! Next step assigned to yourself.'
           : 'Step completed and handed off to colleague!'
       );
+
       setSelectedWorkflowId('');
       setSelectedStepId('');
       setHours('');
@@ -428,7 +432,7 @@ export default function CandidateDashboard() {
     }
   };
 
-  const handleLogout = async () => {
+  const handleLogOut = async () => {
     await supabase.auth.signOut();
     sessionStorage.clear();
     router.push('/candidate-login');
@@ -455,7 +459,7 @@ export default function CandidateDashboard() {
             priority
             className="object-contain"
           />
-          <span className="text-[10px] font-bold tracking-[0.18em] text-slate-400 uppercase border-l border-slate-200 pl-4 py-1">
+          <span className="text-[10px] font-bold tracking-[0.18em] text-slate-400 uppercase border border-slate-200 px-2 py-1">
             Candidate Portal
           </span>
         </div>
@@ -467,7 +471,7 @@ export default function CandidateDashboard() {
             </span>
           </div>
           <button
-            onClick={handleLogout}
+            onClick={handleLogOut}
             className="p-2 border border-slate-200/60 rounded-xl hover:bg-slate-100 text-slate-500 hover:text-slate-800 cursor-pointer"
           >
             <LogOut className="w-4 h-4" />
@@ -668,7 +672,6 @@ export default function CandidateDashboard() {
                   >
                     Incoming Colleague Handoffs
                   </h2>
-
                   {handoffs.length === 0 ? (
                     <div className="bg-white p-12 rounded-2xl border border-slate-200/80 text-center flex flex-col items-center justify-center gap-3 text-slate-400 shadow-xs">
                       <Inbox className="w-8 h-8 text-slate-300 stroke-1" />
@@ -687,12 +690,10 @@ export default function CandidateDashboard() {
                         h.workflows?.title ||
                         h.workflows?.name ||
                         'Accounting Process';
-
                       const parentTitle = workflowTitle.trim().toLowerCase();
+
                       const validProcessSteps = allWorkflows
-                        .filter(
-                          (s) => String(s.workflow_id) === String(h.workflow_id)
-                        )
+                        .filter((s) => String(s.workflow_id) === String(h.workflow_id))
                         .filter((s) => {
                           const title = (s.task_name || '').trim().toLowerCase();
                           return title !== parentTitle && !title.startsWith('handoff from');
@@ -721,8 +722,7 @@ export default function CandidateDashboard() {
                         ''
                       ).replace(/^Handoff from [^:]+:\s*/i, '');
 
-                      const displayStepNumber =
-                        currentStepIndex >= 0 ? currentStepIndex + 1 : h.step_order || 1;
+                      const displayStepNumber = currentStepIndex >= 0 ? currentStepIndex + 1 : h.step_order || 1;
                       const assignerName = h.profiles?.full_name || 'Colleague';
 
                       return (
@@ -734,7 +734,7 @@ export default function CandidateDashboard() {
                             <p className="text-xs font-bold text-slate-800">
                               Handoff from {assignerName}:{' '}
                               <span className="italic font-normal">
-                                "{workflowTitle} - {completedStepName}"
+                                "{workflowTitle} ({completedStepName})"
                               </span>{' '}
                               completed.
                             </p>
@@ -863,10 +863,7 @@ export default function CandidateDashboard() {
                                   {st.step_order || idx + 1}
                                 </span>
                                 <span className="font-medium text-slate-800">
-                                  {(st.task_name || `Step ${idx + 1}`).replace(
-                                    /^Handoff from [^:]+:\s*/i,
-                                    ''
-                                  )}
+                                  {(st.task_name || `Step ${idx + 1}`).replace(/^Handoff from [^:]+:\s*/i, '')}
                                 </span>
                               </div>
                               <span className="text-[10px] font-semibold text-slate-400">
@@ -875,7 +872,7 @@ export default function CandidateDashboard() {
                                 st.status === 'SUBMITTED TO MANAGER' ||
                                 wf.isCompleted ? (
                                   <span className="text-emerald-600 flex items-center gap-1">
-                                    <CheckCircle2 className="w-3 h-3" /> Completed
+                                    Completed <CheckCircle2 className="w-3 h-3" />
                                   </span>
                                 ) : (
                                   'Pending'
@@ -914,7 +911,6 @@ export default function CandidateDashboard() {
                     <span>{errorMsg}</span>
                   </div>
                 )}
-
                 {successMsg && (
                   <div className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-2xl text-xs font-semibold flex items-center gap-2.5">
                     <CheckCircle2 className="w-4 h-4 shrink-0" />
@@ -1089,10 +1085,19 @@ export default function CandidateDashboard() {
                           onChange={(e) => setHandoffTarget(e.target.value)}
                           className="w-full p-3.5 bg-[#F8FAFC] border border-slate-200/80 rounded-xl text-xs font-semibold text-slate-800"
                         >
-                          <option value="">-- Choose Colleague Candidate --</option>
+                          <option value="">-- Choose Candidate --</option>
+                          
+                          {/* Logged in candidate option */}
+                          {profile && (
+                            <option value={profile.id}>
+                              {profile.full_name ? `${profile.full_name} (${profile.email})` : profile.email} (Myself)
+                            </option>
+                          )}
+
+                          {/* Colleagues */}
                           {colleagues.map((c) => (
                             <option key={c.id} value={c.id}>
-                              {c.full_name || c.email} ({c.department || 'Department'})
+                              {c.full_name || c.email} ({c.department || 'Candidate'})
                             </option>
                           ))}
                         </select>
@@ -1179,7 +1184,7 @@ export default function CandidateDashboard() {
                     How do handoffs work?
                   </h3>
                   <p className="text-xs text-slate-600 leading-relaxed">
-                    Candidate-to-candidate handoffs route active steps to fellow team members. Submitting the final step routes the completed process map directly to your manager for review.
+                    Candidate-to-candidate handoffs route active steps to fellow team members or allow you to assign the next step to yourself. Submitting the final step routes the completed process map directly to your manager for review.
                   </p>
                 </div>
               </div>
