@@ -9,7 +9,7 @@ export default async function HomePage() {
   } = await supabase.auth.getSession();
 
   if (!session) {
-    redirect("/login");
+    redirect("/candidate-login");
   }
 
   const { data: profile } = await supabase
