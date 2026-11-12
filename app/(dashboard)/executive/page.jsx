@@ -216,6 +216,8 @@ function TrendChart({ trendData }) {
 }
 
 function BenchmarkComparisonChart({ workflows, workflowSteps }) {
+  const [hoveredIdx, setHoveredIdx] = useState(null);
+
   const chartData = useMemo(() => {
     if (!workflows || workflows.length === 0) return [];
     return workflows.slice(0, 5).map((wf) => {
@@ -224,15 +226,34 @@ function BenchmarkComparisonChart({ workflows, workflowSteps }) {
       const baselineHours =
         Number(wf.baseline_effort_hours) || (aiHours > 0 ? aiHours * 2.5 : 40);
 
+      // Collect primary workflow department + any step performer departments
+      const deptSet = new Set(
+        [
+          wf.department,
+          ...steps.map((s) => s.profiles?.department),
+          ...steps.map((s) => s.workflows?.department),
+        ].filter((d) => Boolean(d && d.trim()))
+      );
+      const departments = deptSet.size > 0 ? Array.from(deptSet) : ['General'];
+
+      const hoursSaved = Math.max(0, Math.round(baselineHours - aiHours));
+      const reductionPct =
+        baselineHours > 0 ? Math.round(((baselineHours - aiHours) / baselineHours) * 100) : 0;
+
       return {
+        id: wf.id,
         title: wf.title || wf.name || 'Workflow Process',
+        departments,
         baseline: Math.round(baselineHours),
         aiEnabled: Math.round(aiHours),
+        hoursSaved,
+        reductionPct,
+        stepCount: steps.length,
+        monthlyVolume: Number(wf.monthly_output_volume || 1),
       };
     });
   }, [workflows, workflowSteps]);
 
-  // Helper to split long axis titles into balanced lines without cutting words
   const wrapLabel = (text, maxCharsPerLine = 16) => {
     const words = text.split(' ');
     const lines = [];
@@ -259,6 +280,7 @@ function BenchmarkComparisonChart({ workflows, workflowSteps }) {
   }
 
   const maxVal = Math.max(...chartData.flatMap((d) => [d.baseline, d.aiEnabled]), 50);
+  const hoveredItem = hoveredIdx !== null ? chartData[hoveredIdx] : null;
 
   return (
     <div className="w-full space-y-4">
@@ -271,9 +293,55 @@ function BenchmarkComparisonChart({ workflows, workflowSteps }) {
         </span>
       </div>
 
-      {/* Increased container height and viewBox height (245) to accommodate multi-line labels */}
-      <div className="h-[270px] w-full">
-        <svg viewBox="0 0 600 245" className="h-full w-full">
+      {/* Relative wrapper for positioning the hover tooltip popup */}
+      <div className="relative h-[285px] w-full">
+        {/* HOVER BREAKDOWN POPUP */}
+        {hoveredItem && (
+          <div
+            className="pointer-events-none absolute top-2 z-20 w-72 -translate-x-1/2 rounded-xl border border-slate-200 bg-white/95 backdrop-blur-xs p-4 shadow-lg text-xs transition-all duration-150"
+            style={{
+              // Align horizontally over the hovered bar group (clamped inside container edges)
+              left: `${Math.min(82, Math.max(18, ((65 + hoveredIdx * (500 / chartData.length) + 30) / 600) * 100))}%`,
+            }}
+          >
+            <div className="border-b border-slate-100 pb-2 mb-2.5">
+              <p className="font-bold text-slate-900 leading-snug">{hoveredItem.title}</p>
+              <div className="flex flex-wrap gap-1 mt-1.5">
+                {hoveredItem.departments.map((dept) => (
+                  <span
+                    key={dept}
+                    className="inline-block rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-700"
+                  >
+                    {dept}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-1.5 text-[11px]">
+              <div className="flex justify-between">
+                <span className="text-slate-500">Current (Human):</span>
+                <span className="font-bold text-slate-800">{hoveredItem.baseline}h / unit</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">AI-Enabled:</span>
+                <span className="font-bold text-[#1E2540]">{hoveredItem.aiEnabled}h / unit</span>
+              </div>
+              <div className="flex justify-between pt-1.5 border-t border-slate-100">
+                <span className="text-slate-500">Time Unlocked:</span>
+                <span className="font-bold text-emerald-600">
+                  -{hoveredItem.hoursSaved}h ({hoveredItem.reductionPct}% faster)
+                </span>
+              </div>
+              <div className="flex justify-between text-[10px] text-slate-400 pt-0.5">
+                <span>{hoveredItem.stepCount} workflow step(s)</span>
+                <span>{hoveredItem.monthlyVolume} unit(s)/mo</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <svg viewBox="0 0 600 260" className="h-full w-full">
           {[0, 0.25, 0.5, 0.75, 1].map((ratio) => {
             const y = 180 - ratio * 150;
             const val = Math.round(ratio * maxVal);
@@ -295,10 +363,37 @@ function BenchmarkComparisonChart({ workflows, workflowSteps }) {
             const baseY = 180 - baseHeight;
             const aiY = 180 - aiHeight;
             const labelLines = wrapLabel(d.title, 16);
+            const deptLabel = d.departments.join(', ');
+            const isHovered = hoveredIdx === idx;
 
             return (
-              <g key={d.title + idx}>
-                <rect x={groupX} y={baseY} width="28" height={baseHeight} fill="#93ACD6" rx="2" />
+              <g
+                key={d.title + idx}
+                className="cursor-pointer"
+                onMouseEnter={() => setHoveredIdx(idx)}
+                onMouseLeave={() => setHoveredIdx(null)}
+              >
+                {/* Invisible wider hit-target & subtle hover highlight column */}
+                <rect
+                  x={groupX - 10}
+                  y="20"
+                  width="80"
+                  height="235"
+                  rx="8"
+                  fill={isHovered ? '#F1F5F9' : 'transparent'}
+                  className="transition-colors duration-150"
+                />
+
+                {/* Baseline Bar */}
+                <rect
+                  x={groupX}
+                  y={baseY}
+                  width="28"
+                  height={baseHeight}
+                  fill="#93ACD6"
+                  rx="2"
+                  opacity={hoveredIdx !== null && !isHovered ? 0.55 : 1}
+                />
                 <text
                   x={groupX + 14}
                   y={baseY - 5}
@@ -310,7 +405,16 @@ function BenchmarkComparisonChart({ workflows, workflowSteps }) {
                   {d.baseline}
                 </text>
 
-                <rect x={groupX + 32} y={aiY} width="28" height={aiHeight} fill="#1E2540" rx="2" />
+                {/* AI-Enabled Bar */}
+                <rect
+                  x={groupX + 32}
+                  y={aiY}
+                  width="28"
+                  height={aiHeight}
+                  fill="#1E2540"
+                  rx="2"
+                  opacity={hoveredIdx !== null && !isHovered ? 0.55 : 1}
+                />
                 <text
                   x={groupX + 46}
                   y={aiY - 5}
@@ -322,24 +426,30 @@ function BenchmarkComparisonChart({ workflows, workflowSteps }) {
                   {d.aiEnabled}
                 </text>
 
-                {/* Render full wrapped title using <tspan> elements */}
+                {/* Full Wrapped X-Axis Workflow Title */}
                 <text
                   x={groupX + 30}
-                  y="198"
+                  y="196"
                   textAnchor="middle"
-                  fill="#475569"
+                  fill="#334155"
                   fontSize="9.5"
                   fontWeight="600"
                 >
                   {labelLines.map((line, lineIdx) => (
-                    <tspan
-                      key={lineIdx}
-                      x={groupX + 30}
-                      dy={lineIdx === 0 ? 0 : 12}
-                    >
+                    <tspan key={lineIdx} x={groupX + 30} dy={lineIdx === 0 ? 0 : 11}>
                       {line}
                     </tspan>
                   ))}
+                  {/* Department Sub-label below title */}
+                  <tspan
+                    x={groupX + 30}
+                    dy="13"
+                    fill="#64748B"
+                    fontSize="8.5"
+                    fontWeight="500"
+                  >
+                    ({deptLabel.length > 20 ? deptLabel.substring(0, 18) + '...' : deptLabel})
+                  </tspan>
                 </text>
               </g>
             );
@@ -377,14 +487,16 @@ function MaturityDonut({ stageData, regularScalingPct }) {
           );
         })}
       </svg>
-      <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+
+      {/* Constrained inner width (max-w-[96px]) + tighter text sizing so it sits cleanly inside the hole */}
+      <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center px-6 text-center">
         <span
-          className="text-3xl font-bold text-slate-900"
+          className="text-3xl font-bold text-slate-900 leading-none"
           style={{ fontFamily: 'var(--font-marcellus), serif' }}
         >
           {regularScalingPct}%
         </span>
-        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+        <span className="mt-1 max-w-[92px] text-[8px] font-bold text-slate-400 uppercase tracking-normal leading-tight">
           Regular + Scaling
         </span>
       </div>
