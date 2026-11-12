@@ -221,7 +221,9 @@ function BenchmarkComparisonChart({ workflows, workflowSteps }) {
     return workflows.slice(0, 5).map((wf) => {
       const steps = workflowSteps.filter((s) => String(s.workflow_id) === String(wf.id));
       const aiHours = steps.reduce((acc, st) => acc + Number(st.duration_hours || 0), 0);
-      const baselineHours = Number(wf.baseline_effort_hours) || (aiHours > 0 ? aiHours * 2.5 : 40);
+      const baselineHours =
+        Number(wf.baseline_effort_hours) || (aiHours > 0 ? aiHours * 2.5 : 40);
+
       return {
         title: wf.title || wf.name || 'Workflow Process',
         baseline: Math.round(baselineHours),
@@ -229,6 +231,24 @@ function BenchmarkComparisonChart({ workflows, workflowSteps }) {
       };
     });
   }, [workflows, workflowSteps]);
+
+  // Helper to split long axis titles into balanced lines without cutting words
+  const wrapLabel = (text, maxCharsPerLine = 16) => {
+    const words = text.split(' ');
+    const lines = [];
+    let currentLine = '';
+
+    words.forEach((word) => {
+      if ((currentLine + ' ' + word).trim().length <= maxCharsPerLine) {
+        currentLine = (currentLine + ' ' + word).trim();
+      } else {
+        if (currentLine) lines.push(currentLine);
+        currentLine = word;
+      }
+    });
+    if (currentLine) lines.push(currentLine);
+    return lines;
+  };
 
   if (chartData.length === 0) {
     return (
@@ -250,8 +270,10 @@ function BenchmarkComparisonChart({ workflows, workflowSteps }) {
           <span className="w-3.5 h-3.5 rounded-xs bg-[#1E2540]" /> AI-enabled workflow
         </span>
       </div>
-      <div className="h-[240px] w-full">
-        <svg viewBox="0 0 600 220" className="h-full w-full">
+
+      {/* Increased container height and viewBox height (245) to accommodate multi-line labels */}
+      <div className="h-[270px] w-full">
+        <svg viewBox="0 0 600 245" className="h-full w-full">
           {[0, 0.25, 0.5, 0.75, 1].map((ratio) => {
             const y = 180 - ratio * 150;
             const val = Math.round(ratio * maxVal);
@@ -264,6 +286,7 @@ function BenchmarkComparisonChart({ workflows, workflowSteps }) {
               </g>
             );
           })}
+
           {chartData.map((d, idx) => {
             const groupWidth = 500 / chartData.length;
             const groupX = 65 + idx * groupWidth;
@@ -271,22 +294,57 @@ function BenchmarkComparisonChart({ workflows, workflowSteps }) {
             const aiHeight = (d.aiEnabled / maxVal) * 150;
             const baseY = 180 - baseHeight;
             const aiY = 180 - aiHeight;
+            const labelLines = wrapLabel(d.title, 16);
+
             return (
               <g key={d.title + idx}>
                 <rect x={groupX} y={baseY} width="28" height={baseHeight} fill="#93ACD6" rx="2" />
-                <text x={groupX + 14} y={baseY - 5} textAnchor="middle" fill="#64748B" fontSize="10" fontWeight="bold">
+                <text
+                  x={groupX + 14}
+                  y={baseY - 5}
+                  textAnchor="middle"
+                  fill="#64748B"
+                  fontSize="10"
+                  fontWeight="bold"
+                >
                   {d.baseline}
                 </text>
+
                 <rect x={groupX + 32} y={aiY} width="28" height={aiHeight} fill="#1E2540" rx="2" />
-                <text x={groupX + 46} y={aiY - 5} textAnchor="middle" fill="#1E2540" fontSize="10" fontWeight="bold">
+                <text
+                  x={groupX + 46}
+                  y={aiY - 5}
+                  textAnchor="middle"
+                  fill="#1E2540"
+                  fontSize="10"
+                  fontWeight="bold"
+                >
                   {d.aiEnabled}
                 </text>
-                <text x={groupX + 30} y="202" textAnchor="middle" fill="#475569" fontSize="10" fontWeight="600">
-                  {d.title.length > 18 ? d.title.substring(0, 16) + '...' : d.title}
+
+                {/* Render full wrapped title using <tspan> elements */}
+                <text
+                  x={groupX + 30}
+                  y="198"
+                  textAnchor="middle"
+                  fill="#475569"
+                  fontSize="9.5"
+                  fontWeight="600"
+                >
+                  {labelLines.map((line, lineIdx) => (
+                    <tspan
+                      key={lineIdx}
+                      x={groupX + 30}
+                      dy={lineIdx === 0 ? 0 : 12}
+                    >
+                      {line}
+                    </tspan>
+                  ))}
                 </text>
               </g>
             );
           })}
+
           <line x1="50" x2="580" y1="180" y2="180" stroke="#CBD5E1" strokeWidth="1.5" />
         </svg>
       </div>
